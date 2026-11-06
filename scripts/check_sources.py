@@ -34,7 +34,8 @@ UA = "Mozilla/5.0 (compatible; crypto-guide-daily-check/1.0)"
 
 IPV4 = r"(?<![\d.])((?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})(?![\d.])"
 # An IP only counts if the word "IP" (or whitelist/trusted) appears shortly before it.
-IP_IN_CONTEXT = re.compile(r"(?:\bIPs?\b|whitelist|trusted)[^.\n]{0,80}?" + IPV4, re.I)
+IP_IN_CONTEXT = re.compile(r"(?:\bIPs?\b|whitelist|trusted|restrict)[^\n]{0,120}?" + IPV4, re.I)
+VARIANTS = ["", "?theme=dark", "index.php"]  # CoinTracking serves slightly different pages per variant
 STEP_WORDS = re.compile(
     r"\b(click|select|choose|copy|paste|enter|enable|disable|create|generate|navigate|"
     r"go to|open|log ?in|hover|export|download|permission|read[- ]only|whitelist|api key|secret|passphrase)\b",
@@ -69,10 +70,13 @@ def instruction_fingerprint(text):
     return hashlib.sha256("\n".join(sorted(set(lines))).encode()).hexdigest()[:16], len(lines)
 
 
-def fetch(slug, offline_dir=None):
+def fetch(slug, offline_dir=None, variant=""):
     if offline_dir:
-        return (Path(offline_dir) / f"{slug}.html").read_text(encoding="utf8")
-    url = BASE_URL.format(slug=slug)
+        f = Path(offline_dir) / f"{slug}{variant.replace('?', '_').replace('.', '_')}.html"
+        if variant and not f.exists():
+            raise FileNotFoundError(f)
+        return (f if variant else Path(offline_dir) / f"{slug}.html").read_text(encoding="utf8")
+    url = BASE_URL.format(slug=slug) + variant
     last = None
     for attempt in range(3):
         try:
@@ -83,6 +87,16 @@ def fetch(slug, offline_dir=None):
             last = e
             time.sleep(5 * (attempt + 1))
     raise RuntimeError(f"{url}: {last}")
+
+
+def find_ips(raw):
+    """IPs that follow an IP/whitelist cue - first in visible text, then anywhere in the page source."""
+    found = set(IP_IN_CONTEXT.findall(page_text(raw)))
+    if not found:
+        loose = html.unescape(re.sub(r"<[^>]+>", " ", raw.replace("\\/", "/")))
+        loose = re.sub(r"\\u002[eE]", ".", loose)
+        found = set(IP_IN_CONTEXT.findall(loose))
+    return found
 
 
 def main():
@@ -98,13 +112,22 @@ def main():
     for slug in slugs:
         url = BASE_URL.format(slug=slug)
         try:
-            text = page_text(fetch(slug, offline))
+            raw = fetch(slug, offline)
+            text = page_text(raw)
         except Exception as e:
             failed.append((slug, str(e)))
             continue
 
         if slug in ips:
-            found = sorted(set(IP_IN_CONTEXT.findall(text)))
+            found = find_ips(raw)
+            for variant in VARIANTS[1:]:
+                if found:
+                    break
+                try:
+                    found = find_ips(fetch(slug, offline, variant))
+                except Exception:
+                    pass
+            found = sorted(found)
             if len(found) == 1 and found[0] != ips[slug]:
                 ip_changes.append((slug, ips[slug], found[0], url))
                 ips[slug] = found[0]
