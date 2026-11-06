@@ -32,10 +32,11 @@ REPORT = Path(os.environ.get("RUNNER_TEMP", ROOT / "checker")) / "report.md"
 BASE_URL = "https://cointracking.info/import/{slug}/"
 UA = "Mozilla/5.0 (compatible; crypto-guide-daily-check/1.0)"
 
-IPV4 = r"(?<![\d.])((?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})(?![\d.])"
+IPV4 = r"(?<![\d.])((?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3})(?!\d|\.\d)"
 # An IP only counts if the word "IP" (or whitelist/trusted) appears shortly before it.
 IP_IN_CONTEXT = re.compile(r"(?:\bIPs?\b|whitelist|trusted|restrict)[^\n]{0,120}?" + IPV4, re.I)
-VARIANTS = ["", "?theme=dark", "index.php"]  # CoinTracking serves slightly different pages per variant
+IP_BEFORE_CUE = re.compile(IPV4 + r"[^\n]{0,40}?(?:\bIPs?\b|whitelist|trusted)", re.I)  # "add 1.2.3.4 as IP Restriction"
+VARIANTS = ["", "?theme=dark", "?language=en", "?mobile=on", "mobile:"]  # CoinTracking serves slightly different pages per variant
 STEP_WORDS = re.compile(
     r"\b(click|select|choose|copy|paste|enter|enable|disable|create|generate|navigate|"
     r"go to|open|log ?in|hover|export|download|permission|read[- ]only|whitelist|api key|secret|passphrase)\b",
@@ -72,11 +73,12 @@ def instruction_fingerprint(text):
 
 def fetch(slug, offline_dir=None, variant=""):
     if offline_dir:
-        f = Path(offline_dir) / f"{slug}{variant.replace('?', '_').replace('.', '_')}.html"
+        f = Path(offline_dir) / f"{slug}{variant.replace('?', '_').replace('.', '_').replace(':', '')}.html"
         if variant and not f.exists():
             raise FileNotFoundError(f)
         return (f if variant else Path(offline_dir) / f"{slug}.html").read_text(encoding="utf8")
-    url = BASE_URL.format(slug=slug) + variant
+    url = (BASE_URL.replace("https://", "https://mobile.") if variant == "mobile:" else BASE_URL).format(slug=slug)
+    url += "" if variant == "mobile:" else variant
     last = None
     for attempt in range(3):
         try:
@@ -91,11 +93,12 @@ def fetch(slug, offline_dir=None, variant=""):
 
 def find_ips(raw):
     """IPs that follow an IP/whitelist cue - first in visible text, then anywhere in the page source."""
-    found = set(IP_IN_CONTEXT.findall(page_text(raw)))
+    text = page_text(raw)
+    found = set(IP_IN_CONTEXT.findall(text)) | set(IP_BEFORE_CUE.findall(text))
     if not found:
         loose = html.unescape(re.sub(r"<[^>]+>", " ", raw.replace("\\/", "/")))
         loose = re.sub(r"\\u002[eE]", ".", loose)
-        found = set(IP_IN_CONTEXT.findall(loose))
+        found = set(IP_IN_CONTEXT.findall(loose)) | set(IP_BEFORE_CUE.findall(loose))
     return found
 
 
