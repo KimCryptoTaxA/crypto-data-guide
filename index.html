@@ -1,0 +1,470 @@
+<!doctype html><html lang="en"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
+<title>Crypto Data Pulling Guide</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Step-by-step instructions for pulling crypto exchange and wallet transaction history for tax preparation.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%230f6e74%22/%3E%3Ctext x=%2216%22 y=%2222%22 font-size=%2216%22 text-anchor=%22middle%22 fill=%22white%22 font-family=%22monospace%22%3E%E2%82%BF%3C/text%3E%3C/svg%3E">
+</head><body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap">
+<style>
+/* Layout: help-center index — sticky search bar, filter chips, single column of expandable source entries */
+:root{
+  --bg:#f5f7f8; --surface:#ffffff; --ink:#14232b; --muted:#566872; --line:#d9e1e5;
+  --accent:#0f6e74; --accent-soft:#e1f0f0; --warn:#9a5b00; --warn-soft:#fdf3e1;
+  --api:#2f5fb3; --api-soft:#e6edfa; --csv:#5b6b1f; --csv-soft:#eef3dc; --addr:#7a3f8f; --addr-soft:#f3e8f7;
+  --f-display:"Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171b; --surface:#162228; --ink:#e3ecef; --muted:#97a8b0; --line:#2a3a42;
+  --accent:#5cc2c4; --accent-soft:#163236; --warn:#f0b65a; --warn-soft:#3a2c14;
+  --api:#8fb0ec; --api-soft:#1c2a44; --csv:#bfd17a; --csv-soft:#262d14; --addr:#d5a3e6; --addr-soft:#30203a;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0f171b; --surface:#162228; --ink:#e3ecef; --muted:#97a8b0; --line:#2a3a42;
+  --accent:#5cc2c4; --accent-soft:#163236; --warn:#f0b65a; --warn-soft:#3a2c14;
+  --api:#8fb0ec; --api-soft:#1c2a44; --csv:#bfd17a; --csv-soft:#262d14; --addr:#d5a3e6; --addr-soft:#30203a;
+  color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 48px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:860px;margin:0 auto}
+header.top{padding-block:36px 8px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--f-display);font-size:clamp(28px,5vw,40px);line-height:1.1;margin:6px 0 10px;text-wrap:balance}
+.lede{color:var(--muted);max-width:62ch;margin:0}
+.rules{margin-top:20px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:16px 18px}
+.rules h2{font-family:var(--f-display);font-size:17px;margin:0 0 8px}
+.rules ol{margin:0;padding-left:20px;display:grid;gap:4px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;border-bottom:1px solid var(--line);margin-top:20px}
+.search{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:0 12px}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.search svg{flex:none;color:var(--muted)}
+#q{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;padding:12px 0;outline:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;align-items:center}
+.chip{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:5px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip:focus-visible,button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.count{font-size:13px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+section.group{margin-top:26px}
+section.group>h2{font-family:var(--f-display);font-size:20px;margin:0 0 10px;display:flex;gap:10px;align-items:baseline}
+section.group>h2 small{font-family:var(--f-body);font-size:13px;font-weight:400;color:var(--muted)}
+details.src{background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:8px}
+details.src[open]{border-color:var(--accent)}
+details.src>summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+details.src>summary::-webkit-details-marker{display:none}
+.name{font-weight:600;font-size:16px;margin-right:auto}
+.badge{flex:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-family:var(--f-mono);font-weight:500;font-size:13px;letter-spacing:.02em}
+.b-exchange{background:var(--api-soft);color:var(--api)} .b-wallet{background:var(--addr-soft);color:var(--addr)} .b-other{background:var(--csv-soft);color:var(--csv)}
+.caret{color:var(--muted);transition:transform .15s}
+details[open] .caret{transform:rotate(90deg)}
+.tag{font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;padding:2px 7px;border-radius:5px;text-transform:uppercase}
+.t-api{background:var(--api-soft);color:var(--api)} .t-csv{background:var(--csv-soft);color:var(--csv)} .t-addr{background:var(--addr-soft);color:var(--addr)}
+.t-flag{background:var(--warn-soft);color:var(--warn)}
+.body{padding:0 16px 16px;display:grid;gap:14px}
+.warn{background:var(--warn-soft);color:var(--ink);border-radius:8px;padding:10px 12px;font-size:14px}
+.warn strong{color:var(--warn)}
+.warn ul{margin:4px 0 0;padding-left:18px}
+.method h3{font-size:13px;font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.method ol{margin:0;padding-left:22px;display:grid;gap:5px}
+.method ol li{padding-left:2px;max-width:70ch}
+.src-note{font-size:12px;color:var(--muted);font-family:var(--f-body);text-transform:none;letter-spacing:0;font-weight:400}
+.src-note a{color:var(--accent)}
+code,.ip{font-family:var(--f-mono);font-size:13.5px;background:var(--accent-soft);padding:1px 6px;border-radius:4px;word-break:break-all}
+.ip{display:inline-flex;align-items:center;gap:6px}
+.copy{font:inherit;font-size:11px;border:1px solid var(--line);background:var(--surface);color:var(--accent);border-radius:4px;padding:0 6px;cursor:pointer}
+.empty{padding:28px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px;margin-top:20px}
+footer{margin-top:36px;font-size:13px;color:var(--muted);max-width:70ch}
+footer a{color:var(--accent)}
+mark{background:var(--warn-soft);color:inherit;padding:0 1px;border-radius:2px}
+@media (max-width:520px){.sep{display:none}.count{margin-left:0;width:100%}}
+@media (prefers-reduced-motion:reduce){.caret{transition:none}}
+.rules a{color:var(--accent)}
+#manual-entry{margin-top:40px;scroll-margin-top:150px;border-top:2px solid var(--ink);padding-top:22px}
+#manual-entry>h2{font-family:var(--f-display);font-size:24px;margin:4px 0 8px}
+#manual-entry p{max-width:68ch;margin:0 0 10px}
+.me-steps{display:grid;gap:4px;margin:0 0 18px;padding-left:22px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:12px;font-weight:500;color:var(--muted);white-space:nowrap;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+.colref td:first-child{font-family:var(--f-mono);white-space:nowrap}
+.req{font-family:var(--f-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--warn)}
+.opt{font-family:var(--f-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.ex td{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+h3.me{font-family:var(--f-display);font-size:18px;margin:24px 0 8px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px}
+.btn{font:inherit;font-size:14px;font-weight:500;border-radius:8px;padding:8px 14px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.status{font-size:13.5px;margin-top:10px;min-height:1.4em}
+.status.err{color:var(--warn)}
+.status.ok{color:var(--accent)}
+.status ul{margin:4px 0 0;padding-left:18px}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">Crypto tax · Gathering stage</div>
+    <h1>Pulling your exchange &amp; wallet transactions</h1>
+    <p class="lede">Find each exchange, wallet or app you used and follow its steps. Most sources offer a read-only API key, a CSV export, or both. Wallets only need a public address or XPUB key.</p>
+    <div class="rules">
+      <h2>Before you send anything</h2>
+      <ol>
+        <li><strong>Read-only only.</strong> Never enable trading, withdrawal or transfer permissions on an API key.</li>
+        <li><strong>Paste keys as text</strong> into a Word document: API key, secret key, and passphrase or customer ID where the steps ask for one. No screenshots, no PDFs.</li>
+        <li><strong>Pull full history</strong>, from your very first transaction to the end of the latest tax year. Some exchanges cap each export at 3 or 12 months, so run several exports to cover everything.</li>
+        <li><strong>Upload everything</strong> to your ShareFile folder named <em>Last Name, First Name – Crypto Files</em>.</li>
+        <li><strong>Can't find your source?</strong> Use the <a href="#manual-entry">Manual Entry Spreadsheet</a> below, one file per unsupported source.</li>
+      </ol>
+    </div>
+  </header>
+
+  <div class="bar" role="search">
+    <label class="search" for="q">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search an exchange, wallet, blockchain or step…" autocomplete="off">
+    </label>
+    <div class="chips" id="chips">
+      <button class="chip" data-f="type" data-v="all" aria-pressed="true">All</button>
+      <button class="chip" data-f="type" data-v="exchange" aria-pressed="false">Exchanges</button>
+      <button class="chip" data-f="type" data-v="wallet" aria-pressed="false">Wallets &amp; blockchains</button>
+      <button class="chip" data-f="type" data-v="other" aria-pressed="false">Other software</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button class="chip" data-f="m" data-v="api" aria-pressed="false">Has API</button>
+      <button class="chip" data-f="m" data-v="csv" aria-pressed="false">Has CSV</button>
+      <button class="chip" data-f="m" data-v="addr" aria-pressed="false">Address / XPUB</button>
+      <span class="count" id="count"></span>
+    </div>
+  </div>
+
+  <main id="list"></main>
+  <div class="empty" id="empty" hidden>No match. Check the spelling, or use the <strong>Manual Entry Spreadsheet</strong> for sources not listed here.</div>
+
+  <section id="manual-entry" aria-labelledby="me-title">
+    <div class="eyebrow">For sources not listed above</div>
+    <h2 id="me-title">Manual Entry Spreadsheet</h2>
+    <p>Use this for any exchange, wallet or platform we can't pull automatically. Download the template, fill it in with Excel or Google Sheets, and send it back to us.</p>
+    <div class="toolbar">
+      <button class="btn primary" id="me-tpl" type="button">Download template (.csv)</button>
+      <button class="btn" id="me-tpl-opt" type="button">Template with optional columns (.csv)</button>
+    </div>
+    <div class="status" id="me-status" role="status" aria-live="polite"></div>
+    <ol class="me-steps">
+      <li>Make <strong>one file per source</strong>, and put the source's name in the Exchange column on every row.</li>
+      <li>Enter every transaction from your first one to the end of the latest tax year, one transaction per row.</li>
+      <li>Keep the header row exactly as it is and save the file as <strong>CSV</strong>.</li>
+      <li>Upload it to your ShareFile <em>Crypto Files</em> folder.</li>
+    </ol>
+
+    <h3 class="me">Column guide</h3>
+    <div class="tbl-wrap">
+      <table class="colref">
+        <thead><tr><th>Column</th><th></th><th>What to enter</th></tr></thead>
+        <tbody>
+          <tr><td>Type</td><td><span class="req">Required</span></td><td>What happened, e.g. Trade, Deposit, Withdrawal, Income, Staking, Airdrop, Mining, Spend, Gift, Lost.</td></tr>
+          <tr><td>Buy Amount</td><td></td><td>Amount you received. Leave blank for a withdrawal.</td></tr>
+          <tr><td>Buy Currency</td><td></td><td>Ticker of what you received, e.g. BTC, ETH, USD.</td></tr>
+          <tr><td>Sell Amount</td><td></td><td>Amount you gave up or sent. Leave blank for a deposit or income.</td></tr>
+          <tr><td>Sell Currency</td><td></td><td>Ticker of what you gave up.</td></tr>
+          <tr><td>Fee</td><td></td><td>Fee paid, if any.</td></tr>
+          <tr><td>Fee Currency</td><td></td><td>Ticker the fee was paid in.</td></tr>
+          <tr><td>Exchange</td><td></td><td>Name of the platform or wallet, the same on every row of this file.</td></tr>
+          <tr><td>Trade-Group</td><td></td><td>Optional label to group rows, e.g. an account or strategy name.</td></tr>
+          <tr><td>Comment</td><td></td><td>Anything that helps us, e.g. "bought with card" or "moved from Ledger".</td></tr>
+          <tr><td>Date</td><td><span class="req">Required</span></td><td>Date and time of the transaction, as <code>YYYY-MM-DD HH:MM:SS</code> (24-hour).</td></tr>
+          <tr><td>Liquidity pool</td><td><span class="opt">Optional</span></td><td>Pool name, if the transaction was a liquidity pool deposit or withdrawal.</td></tr>
+          <tr><td>Tx-ID</td><td><span class="opt">Optional</span></td><td>Blockchain transaction hash or the platform's order ID.</td></tr>
+          <tr><td>Buy Value in Account Currency</td><td><span class="opt">Optional</span></td><td>USD value of what you received at the time. Leave blank or 0 and CoinTracking calculates it.</td></tr>
+          <tr><td>Sell Value in Account Currency</td><td><span class="opt">Optional</span></td><td>USD value of what you gave up at the time. Leave blank or 0 and CoinTracking calculates it.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="me">Examples</h3>
+    <div class="tbl-wrap">
+      <table class="ex">
+        <thead><tr><th>Type</th><th>Buy Amount</th><th>Buy Currency</th><th>Sell Amount</th><th>Sell Currency</th><th>Fee</th><th>Fee Currency</th><th>Exchange</th><th>Trade-Group</th><th>Comment</th><th>Date</th><th>Liquidity pool</th><th>Tx-ID</th></tr></thead>
+        <tbody>
+          <tr><td>Trade</td><td>0.5</td><td>ETH</td><td>1200</td><td>USDC</td><td>2.5</td><td>USDC</td><td>ExampleDEX</td><td></td><td>Swap</td><td>2025-03-14 09:30:00</td><td></td><td>0x8f3c2a91d4e7b6058c1f2e9a7d3b4c5e6f708192a3b4c5d6e7f8091a2b3c4d5e</td></tr>
+          <tr><td>Deposit</td><td>0.1</td><td>BTC</td><td></td><td></td><td></td><td></td><td>ExampleDEX</td><td></td><td>From Ledger</td><td>2025-04-02 18:05:00</td><td></td><td>4a7d1e9c2b8f3065d1e4a7c9b2f8e3d6a1c5b9e7f2d4a8c6b3e1f9d7a5c2b8e4</td></tr>
+          <tr><td>Withdrawal</td><td></td><td></td><td>0.5</td><td>ETH</td><td>0.002</td><td>ETH</td><td>ExampleDEX</td><td>LP</td><td>Added to liquidity pool</td><td>2025-05-20 14:10:00</td><td>ETH/USDC</td><td>0x2b7e9f1c4d6a8035e2c7b9d1f4a6e8c3b5d7f9a1c2e4b6d8f0a3c5e7b9d1f2a4</td></tr>
+          <tr><td>Deposit</td><td>0.52</td><td>ETH</td><td></td><td></td><td>0.002</td><td>ETH</td><td>ExampleDEX</td><td>LP</td><td>Removed from liquidity pool</td><td>2025-09-02 10:25:00</td><td>ETH/USDC</td><td>0x9c4e1a7f3b5d8026c4e9a1f7b3d5c8e2a6f4b9d1c7e3a5f8b2d6c9e4a1f7b3d5</td></tr>
+          <tr><td>Staking</td><td>0.8</td><td>SOL</td><td></td><td></td><td></td><td></td><td>ExampleDEX</td><td></td><td>Reward</td><td>2025-06-30 00:00:00</td><td></td><td>5Hk2xQ9mV7pR3tW8nB4cL6yD1fG9jZ2aS5uE7iO3qX8vM4rT6wN1pY9bC3dF7hJ2k</td></tr>
+          <tr><td>Withdrawal</td><td></td><td></td><td>0.05</td><td>BTC</td><td>0.0001</td><td>BTC</td><td>ExampleDEX</td><td></td><td>To own wallet</td><td>2025-08-11 12:45:00</td><td></td><td>e3b9c7a1f5d2084b6c9e3a7f1d5b8c2e6a4f9d3b7c1e5a8f2d6b9c4e7a3f1d5b</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+  <footer>
+    <p><strong>Whitelist IPs are checked every 24 hours</strong> against CoinTracking's import pages. Last change: <span id="last-updated"></span>.</p>
+    <p>Steps marked <strong>CoinTracking</strong> follow CoinTracking's public import pages. Steps marked <strong>Firm guide</strong> come from our previous instructions where CoinTracking does not publish the exchange-side steps. Exchanges change their menus often; if a step no longer matches what you see, export the closest full transaction history and tell us in your ShareFile note.</p>
+  </footer>
+</div>
+
+<script>
+/* IP-WHITELIST:START (updated by the daily checker; keys are CoinTracking import page slugs) */
+const IPS = {
+ "binance_api": "54.74.133.229",
+ "bitget_api": "63.32.177.239",
+ "bybit_api": "3.248.77.147",
+ "gateio_api": "3.251.9.71",
+ "gemini_api": "54.75.92.101",
+ "kucoin_api": "54.155.19.138",
+ "mexc_api": "54.155.85.51",
+ "okex_api": "54.155.253.67"
+};
+const LAST_UPDATED = "2026-11-07";
+/* IP-WHITELIST:END */
+const CT = s => ({label:"CoinTracking", url:"https://cointracking.info/import/"+s});
+const FIRM = {label:"Firm guide"};
+const ipOf = k => ip(IPS[k]);
+const ip = v => `<span class="ip">${v}<button class="copy" data-copy="${v}" type="button">Copy</button></span>`;
+
+const SOURCES = [
+/* ---------- EXCHANGES ---------- */
+{id:"binance",name:"Binance",type:"exchange",aka:"binance.com bnb",
+ flags:["Use CSV too if you did more than spot"],
+ warn:["CoinTracking strongly recommends also sending CSV files if you used anything beyond regular spot trading.","BNB Chain / BSC wallets are pulled by wallet address, not this API."],
+ api:{src:CT("binance_api"),steps:["Hover the account icon (top right) → <b>Account</b> → <b>API Management</b> in the left menu.","Click <b>Create Tax Report API</b>.","Click <b>Edit restrictions</b> and choose <b>Restrict access to trusted IPs only</b>.",`Enter the IP ${ipOf("binance_api")} and click <b>Confirm</b>.`,"Copy the API key and secret key into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Orders → Spot Order → Trade History</b>.","Click <b>Export complete trade history</b> (top right).","Each export covers at most 3 months, so repeat until your whole history is covered.","Upload all CSV files."]}},
+{id:"binance-us",name:"Binance.US",type:"exchange",aka:"binance us",
+ warn:["The CSV export covers spot trades, conversions and withdrawals."],
+ api:{src:FIRM,steps:["Hover your username → <b>Export Reports</b>.","Click <b>Generate Tax API</b> (read-only) and confirm.","Copy the API key and secret key into your Word document."]},
+ csv:{src:CT("binance_us"),steps:["Click <b>Wallet</b> → <b>Export Reports</b>.","Under Custom Reports choose all assets, all transaction types, your full date range and <b>CSV</b>.","Click <b>Generate Report</b>; you'll get an email when it's ready.","Download and upload the CSV."]}},
+{id:"bibox",name:"Bibox",type:"exchange",flags:["History deleted after 3 months"],
+ warn:["Bibox deletes trading history after 3 months. Older records can't be recovered from the exchange."],
+ api:{src:FIRM,steps:["Open the API page in your account center.","Add a name, enter your 2FA code and save the key.","Select <b>Read information</b> permission only.","Copy the API key and secret key into your Word document."]}},
+{id:"bitfinex",name:"Bitfinex",type:"exchange",
+ api:{src:CT("bitfinex_api"),steps:["Hover the account icon → <b>API Keys</b> (setting.bitfinex.com/api).","Click <b>Create New Key</b>.","Leave the default permissions; they're read-only. Do not enable any write permissions.","Label the key and generate it.","Copy the API key and secret key into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Account → Reports</b> (report.bitfinex.com).","Export <b>Trading → Trades</b> for your full period.","Export <b>Movements → Deposits</b> and <b>Movements → Withdrawals</b>.","Files arrive by email; upload all three (CoinTracking also accepts the full Ledger export)."]}},
+{id:"bitget",name:"Bitget",type:"exchange",flags:["Passphrase required"],
+ warn:["Send the passphrase together with the API key and secret.","Bitget Wallet is separate: send its wallet address too."],
+ api:{src:CT("bitget_api"),steps:["Hover the account icon → <b>API Keys</b> (bitget.com/account/newapi).","Choose <b>System-generated API key</b>.","Enter a note and a passphrase you'll share with us.","Set permissions to <b>Read-only</b> and click <b>Select all</b> next to Permission type.",`Click Next, enter ${ipOf("bitget_api")} under Link IP address, then Next again.`,"Copy the API key, secret and passphrase into your Word document."]}},
+{id:"bitmex",name:"BitMEX",type:"exchange",
+ warn:["CoinTracking recommends the CSV export for BitMEX. Funding payments and liquidations are included in it."],
+ csv:{src:CT("bitmex_api"),steps:["Go to <b>Account → Transaction History</b>.","Select your full date range.","Download the CSV and upload it."]},
+ api:{src:FIRM,steps:["Go to <b>API → API Key Management</b>.","Name the key and leave CIDR blank.","Create it without any extra permissions.","Copy the API key and secret key into your Word document."]}},
+{id:"bitpanda",name:"Bitpanda",type:"exchange",
+ warn:["CoinTracking imports Bitpanda by CSV; Bitpanda doesn't offer an API for tax software.","Staking rewards are only in the CSV."],
+ csv:{src:CT("bitpanda_api"),steps:["Go to <b>Account → History</b> (web.bitpanda.com/history).","Click <b>Export</b> and choose your full time period.","Select <b>Download CSV</b> and upload it."]}},
+{id:"bitrue",name:"Bitrue",type:"exchange",flags:["3-month export limit"],
+ warn:["CoinTracking imports Bitrue by CSV only.","Each export covers 3 months; repeat to cover your full history."],
+ csv:{src:CT("bitrue_api"),steps:["Go to <b>Orders → Spot Orders → Order History</b>.","Click <b>Export</b> (top right).","Choose <b>Trade History</b> and a 3-month window, then OK.","Repeat for every period and upload all files."]}},
+{id:"bitstamp",name:"Bitstamp",type:"exchange",flags:["API or CSV, not both"],
+ warn:["Bitstamp's API and CSV data are not compatible. We will use one method only, so send the API key unless we ask for CSV."],
+ api:{src:CT("bitstamp_api"),steps:["Click the account icon → <b>Settings → API access</b>.","Click <b>Create new key</b> and open <b>Advanced settings</b>.","Enable <b>View account balances</b>, <b>View your transactions</b>, and <b>View and manage Earn</b> (only if you used Earn).","Activate the key with 2FA.","Copy the key, secret and your <b>Customer ID</b> (under Account) into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Account → Transaction history</b>.","Click <b>Open export options</b>, then <b>Export selection</b>.","Upload the CSV."]}},
+{id:"blockchain-com",name:"Blockchain.com",type:"exchange",aka:"blockchain exchange",
+ csv:{src:FIRM,steps:["Select an asset under <b>Assets</b> (e.g. Bitcoin).","Scroll to <b>Activity</b> → <b>Export History</b>.","Choose the wallet and period, click <b>Generate Report</b>.","Download the CSV; repeat for each asset and upload all files."]}},
+{id:"btcmarkets",name:"BTC Markets",type:"exchange",
+ api:{src:CT("btcmarkets_api"),steps:["Go to <b>Account → API Keys</b> (btcmarkets.net/account/apikey).","Create a <b>Read Only</b> key.","Copy the API key and secret into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Buy / Sell → Trade History</b>.","Click <b>Export to CSV</b> and upload the file."]}},
+{id:"bybit",name:"Bybit",type:"exchange",flags:["12-month export limit"],
+ warn:["Bybit EU is a separate account: send a key for each.","CSV exports cover up to 12 months each, with 10 exports per month."],
+ api:{src:CT("bybit_api"),steps:["Go to <b>User Profile → Account &amp; Security → API Management</b>.","Click <b>Create New Key</b> → <b>System-generated API Keys</b>.","Choose <b>API Transaction</b> and enter a name.","Set permissions to <b>Read-Only</b>.",`Restrict access to the IP ${ipOf("bybit_api")}.`,"Tick all boxes: Unified Trading, Earn, Fiat Trading and Assets.","Copy the API key and secret into your Word document."]},
+ csv:{src:FIRM,steps:["Open bybit.com/user/assets/exportStatment.","Select Account Change Details, Closed PnL and Trade History (derivatives) and Accrual Records (lending) for each account type used.","Choose a time range and click <b>Export</b>; repeat to cover all years.","Upload all files."]}},
+{id:"bydfi",name:"BYDFi",type:"exchange",
+ warn:["BYDFi has no API for tax software; send CSV files only."],
+ csv:{src:CT("bydfi"),steps:["Spot trades: <b>Orders → Spot → Trade History</b> → select full date range → <b>Export</b>.","Deposits &amp; withdrawals: <b>Assets → My Assets → Funds History</b> → Deposit history and Withdrawal history → <b>Export</b>.","Fiat: <b>Funds History → Fiat history</b> → <b>Export</b>.","Upload every file."]}},
+{id:"changelly",name:"Changelly",type:"exchange",
+ csv:{src:FIRM,steps:["Open changelly.com/history.","Click <b>Download CSV</b> and upload it."]}},
+{id:"coinbase",name:"Coinbase",type:"exchange",aka:"coinbase advanced trade",
+ warn:["Coinbase Prime, Coinbase Business and Coinbase Wallet are separate imports. For Coinbase Wallet, send the wallet addresses (see Wallets)."],
+ api:{src:CT("coinbase_api"),steps:["Go to <b>Advanced API</b> → <b>Create API Key</b>.","Select all accounts.","Enable only the <b>View</b> (read-only) permission.","Save, then copy the API key and secret into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Accounts → Statements</b> (accounts.coinbase.com/statements).","Under <b>Generate custom statement</b> choose all assets, all transactions, full date range, <b>CSV</b>.","Click <b>Generate</b> and upload the file."]}},
+{id:"coinbase-pro",name:"Coinbase Pro (legacy)",type:"exchange",aka:"gdax",
+ warn:["Coinbase Pro was retired in 2023. Only send this if you traded on Pro before then."],
+ csv:{src:FIRM,steps:["In Coinbase, open your profile → <b>Statements</b> → Coinbase Pro.","Choose <b>Generate a custom report</b>: Report type <b>Account</b>, <b>All accounts</b>.","Download each year needed and upload."]}},
+{id:"coinjar",name:"CoinJar",type:"exchange",
+ csv:{src:FIRM,steps:["Go to <b>More → Reports &amp; statements</b>.","Generate <b>Purchases &amp; Sales</b> for your full history; the CSV arrives by email.","Repeat for <b>Deposits &amp; Withdrawals</b>.","Upload both files."]}},
+{id:"coinspot",name:"CoinSpot",type:"exchange",
+ api:{src:CT("coinspot_api"),steps:["Go to <b>Account → API</b> (coinspot.com.au/my/api).","Click <b>Generate New API Key</b>.","Choose API Key Type <b>Read Only</b>.","Copy the key and secret into your Word document."]}},
+{id:"cryptocom",name:"Crypto.com App",type:"exchange",aka:"crypto.com cdc",
+ warn:["Crypto.com doesn't always export fees and dust conversions correctly; we review these closely."],
+ csv:{src:FIRM,steps:["Open the Crypto.com app → <b>Account</b> → clock icon (top right).","Tap the export icon, choose the full time frame, tap <b>Export to CSV</b>.","Repeat for each wallet offered (crypto, fiat, card) and upload all files."]}},
+{id:"deribit",name:"Deribit",type:"exchange",
+ api:{src:CT("deribit_api"),steps:["Open <b>Account → API</b> (deribit.com/main#/account?scrollTo=api).","Click <b>Add a new key</b>.","Set every section to <b>Read</b>, never Read_Write.","Copy the <b>Client ID</b> and <b>Client Secret</b> into your Word document."]}},
+{id:"etoro",name:"eToro",type:"exchange",
+ warn:["eToro has no API for transaction data.","We only process the crypto lines; stocks and CFDs are handled separately."],
+ csv:{src:CT("etoro"),steps:["Go to <b>Settings → Account → Account Statement</b> (etoro.com/documents/accountstatement).","Select your full date range and click <b>Create</b>.","Download the file and upload it."]}},
+{id:"ftx",name:"FTX",type:"exchange",flags:["Closed"],
+ warn:["FTX is closed. Your history is only available from the claims portal."],
+ csv:{src:FIRM,steps:["Log in at claims.ftx.com and follow the steps to download your transaction history.","Upload every file you receive."]}},
+{id:"gateio",name:"Gate.io",type:"exchange",aka:"gate",flags:["3-month export limit"],
+ api:{src:CT("gateio_api"),steps:["Hover the account icon → <b>API Management</b>.","Click <b>Create API Key</b>.",`Enable <b>IP Whitelist</b> and enter ${ipOf("gateio_api")}.`,"Select <b>APIv4</b>.","Set every permission slider to <b>read-only</b>.","Copy the API key and secret into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Assets → Transaction History</b> → <b>Request batch data</b>.","Each export covers 3 months; repeat to cover your full history.","Upload all files."]}},
+{id:"gemini",name:"Gemini",type:"exchange",flags:["Earn needs CSV"],
+ warn:["The API doesn't fully cover Earn transfers and redemptions. If you used Gemini Earn, also send the Earn History file."],
+ api:{src:CT("gemini_api"),steps:["Open exchange.gemini.com/settings/api.","If asked for a scope, choose <b>Primary</b>.","Click <b>Create A New API Key</b> and set it to <b>Auditor</b> (read-only).",`Under Trusted IPs add ${ipOf("gemini_api")}.`,"Copy the API key and secret into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Account → Balances → Transaction History</b>, pick the full date range and download the XLSX.","Go to <b>Earn History</b>, pick the date range and download the XLSX.","Upload both files."]}},
+{id:"hitbtc",name:"HitBTC",type:"exchange",
+ warn:["Some delisted coins can't be pulled by API; send the CSV files as well."],
+ api:{src:CT("hitbtc_api"),steps:["Go to <b>Settings → API Keys</b> → <b>New API Key</b>.","Enable <b>History</b>, <b>Trading balance</b>, <b>Payment information</b> and <b>Order book</b> (view rights only).","Copy the key and secret into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Reports → Wallet → Transaction history</b>.","Choose your date range and click <b>Export as .csv</b>.","Download the Trades file and the Deposits/Withdrawals file; upload both."]}},
+{id:"htx",name:"HTX (Huobi)",type:"exchange",aka:"huobi",flags:["API: last 180 days"],
+ warn:["The HTX API only returns the last 180 days. Export your full history from HTX as well."],
+ api:{src:CT("huobi_api"),steps:["Hover the account icon → <b>API Management</b> (htx.com/en-us/apikey).","Create a key with <b>Read-only</b> permission.","Copy the key and secret into your Word document."]},
+ csv:{src:FIRM,steps:["Export your complete transaction history from HTX (trades, deposits, withdrawals).","Upload all files."]}},
+{id:"idex",name:"IDEX",type:"exchange",
+ addr:{src:FIRM,steps:["IDEX trades settle on-chain. Send the wallet address you connected to IDEX (see EVM wallets)."]}},
+{id:"kraken",name:"Kraken",type:"exchange",aka:"kraken pro",
+ warn:["Kraken Futures is a separate account; see Kraken Futures."],
+ api:{src:CT("kraken_api"),steps:["Log in to <b>Kraken Pro</b> → <b>Settings → API</b> (pro.kraken.com/app/settings/api).","Click <b>Create API Key</b> and name it.","Select only <b>Query Funds</b>, <b>Query Ledger Entries</b> and <b>Export Data</b>.","Copy the API key and private key into your Word document."]},
+ csv:{src:FIRM,steps:["Go to <b>Settings → Documents → Create Export</b>.","Choose <b>Ledger</b>, your full date range and <b>CSV</b>.","Click <b>Generate</b>, then <b>Download</b>.","Unzip and upload the CSV."]}},
+{id:"kraken-futures",name:"Kraken Futures",type:"exchange",
+ csv:{src:FIRM,steps:["Open pro.kraken.com/app/settings/documents.","Click <b>Create export</b>, choose <b>Ledger</b> and switch to <b>Futures</b>.","Click <b>Generate</b>, download and upload the CSV."]}},
+{id:"kucoin",name:"KuCoin",type:"exchange",flags:["API: last 12 months","Passphrase required"],
+ warn:["The KuCoin API only returns the last year. Send the CSV export for anything older.","Each sub-account needs its own API key.","US users may no longer have access. If you can't log in, request your history from KuCoin support."],
+ api:{src:CT("kucoin_api"),steps:["Hover the account icon → <b>API Management</b> → <b>Create API</b>.","Enter an API name and set the passphrase to <code>cointracking</code>.",`Add ${ipOf("kucoin_api")} as the IP restriction.`,"Grant read (General) permission only.","Copy the key, secret and passphrase into your Word document. Repeat per sub-account."]},
+ csv:{src:FIRM,steps:["Go to <b>Orders → Download / Export</b>.","Select <b>Account History</b> and <b>Spot Orders → Filled Orders (Show Order Splitting)</b>, plus any other markets you traded.","Set Timezone to <b>UTC</b> and tick <b>Includes Sub-Accounts</b>; use Custom for data older than a year.","Choose CSV, confirm, then download and upload the files."]}},
+{id:"mexc",name:"MEXC",type:"exchange",flags:["API: last 7 days","Full export required"],
+ warn:["The MEXC API only returns trades from the last 7 days and deposits/withdrawals from the last 180 days. A full transaction export is required for tax work.","Missing MEXC history leads to wrong cost basis, so please send the export even if you send an API key."],
+ api:{src:CT("mexc_api"),steps:["Hover the account icon → <b>API</b>.","Enable all <b>View/Read</b> permissions for Spot and Futures. No trading or withdrawal.",`Add ${ipOf("mexc_api")} as the Link IP Address and click <b>Create</b>.`,"Copy the API key and secret into your Word document."]},
+ csv:{src:CT("mexc"),steps:["Export your complete transaction history from MEXC: spot trades, futures, deposits and withdrawals, covering every year you used the account.","Upload all export files.","If an export isn't available for older years, request your history from MEXC support."]}},
+{id:"okx",name:"OKX",type:"exchange",aka:"okex",flags:["API: last 3 years","Passphrase required"],
+ warn:["The OKX API returns 3 years of data. Send a CSV for older activity.","OKX Wallet is separate: send its wallet addresses too."],
+ api:{src:CT("okex_api"),steps:["Hover the account icon → <b>API</b> → <b>Create API key</b> and name it.",`Whitelist the IP ${ipOf("okex_api")}.`,"Leave permissions on <b>Read</b> only.","Set a passphrase.","Copy the API key, secret and passphrase into your Word document."]},
+ csv:{src:FIRM,steps:["Download your full trading and funding history from OKX for anything older than 3 years.","Upload all files."]}},
+{id:"poloniex",name:"Poloniex",type:"exchange",
+ warn:["Margin trades may not import fully; we review these by hand."],
+ api:{src:CT("poloniex_api"),steps:["Go to <b>Settings → API Keys</b> and create a <b>new</b> key.","Disable <b>Enable Trading</b> and <b>Enable Withdrawals</b>.","Copy the API key and secret into your Word document."]},
+ csv:{src:CT("poloniex_api"),steps:["Go to <b>Activity → Trade History</b>.","Export as CSV and upload."]}},
+{id:"robinhood",name:"Robinhood Crypto",type:"exchange",aka:"robinhood",
+ warn:["Robinhood has no API for tax software.","A 1099 doesn't replace the full transaction record; please send the CSV as well."],
+ csv:{src:CT("robinhood"),steps:["In the app, tap the profile icon → <b>Reports and Statements → Account Activity Reports</b>.","Select your full date range and create the report.","Download the CSV and upload it, along with any 1099 forms."]}},
+{id:"uphold",name:"Uphold",type:"exchange",
+ csv:{src:CT("uphold"),steps:["Open <b>Activity</b> (top right).","Click the document icon → <b>Transaction History</b> → <b>Generate report</b>.","Download the CSV from the email link and upload it."]}},
+
+/* ---------- WALLETS & BLOCKCHAINS ---------- */
+{id:"evm",name:"EVM wallets (MetaMask, Rabby, Trust, Coinbase Wallet…)",type:"wallet",aka:"ethereum eth erc20 erc-20 arbitrum base polygon optimism bnb bsc avalanche flare flr linea metamask 0x",
+ warn:["One 0x address can hold activity on many chains. Tell us every chain you used it on (Ethereum, Base, Arbitrum, Polygon, BNB Chain, Flare, etc.).","Never send a seed phrase or private key."],
+ addr:{src:{label:"CoinTracking blockchain import", url:"https://cointracking.info/import/eth_address"},steps:["Open the wallet and copy each account's public address (starts with <code>0x</code>).","In your spreadsheet, list per row: wallet app, label (e.g. ETH_1), full address, and the chains used.","Upload the spreadsheet as Excel or Word."]}},
+{id:"bitcoin",name:"Bitcoin & UTXO chains (BTC, LTC, BCH, DOGE)",type:"wallet",aka:"btc xpub ypub zpub litecoin bitcoin cash dogecoin hd wallet",
+ warn:["Send the XPUB / YPUB / ZPUB for HD wallets. A single address misses change addresses and gives an incomplete history."],
+ addr:{src:{label:"CoinTracking blockchain import", url:"https://cointracking.info/import/bitcoin_address"},steps:["In your wallet app, find the account's extended public key (xpub, ypub or zpub).","Record the coin, wallet app and key in your spreadsheet. For a non-HD wallet, list each address.","Upload the spreadsheet as Excel or Word."]}},
+{id:"solana",name:"Solana wallets (Phantom, Solflare…)",type:"wallet",aka:"sol spl phantom solflare backpack",
+ addr:{src:{label:"CoinTracking blockchain import", url:"https://cointracking.info/import/sol_address"},steps:["Copy each Solana account's public address.","Record wallet app, label and address in your spreadsheet and upload it."]}},
+{id:"other-chains",name:"Other blockchains (Cardano, XRP, Tron, Cosmos, TON…)",type:"wallet",aka:"ada xrp ripple trx tron atom cosmos ton stellar xlm tezos eos neo dash nano lisk",
+ addr:{src:{label:"CoinTracking blockchain import", url:"https://cointracking.info/import/"},steps:["Copy the public address (or the account's extended public key, if the wallet shows one).","Record the blockchain, wallet app and address in your spreadsheet and upload it."]}},
+{id:"ledger",name:"Ledger Live",type:"wallet",aka:"ledger hardware",
+ warn:["Also send the BTC xpub and EVM addresses from Ledger if you used DeFi through MetaMask or Rabby."],
+ csv:{src:FIRM,steps:["Open Ledger Live → <b>Settings → Accounts</b>.","Next to <b>Operation history</b> click <b>Save</b>, select all accounts.","Click <b>Save</b> again and upload the CSV."]}},
+{id:"trezor",name:"Trezor",type:"wallet",aka:"trezor suite hardware xpub",
+ addr:{src:FIRM,steps:["Connect your Trezor and open Trezor Suite.","Select the account in the sidebar → <b>Details</b> → <b>Show public key</b>.","Copy the key into your document; repeat for each account."]}},
+{id:"exodus",name:"Exodus",type:"wallet",
+ csv:{src:FIRM,steps:["Enable the <b>Developer</b> menu in Exodus.","Choose <b>Developer → Export All Transactions</b>.","Upload the CSV."]}},
+{id:"bitcoin-core",name:"Bitcoin / Altcoin Core client",type:"wallet",aka:"bitcoin qt core wallet",
+ warn:["Fees in the Core export are not imported automatically; we add them during review."],
+ csv:{src:CT("bitcoin_core"),steps:["Set the client language to <b>English</b>.","Export all transactions as CSV. The header should read like <code>Amount (BTC)</code>.","Upload the CSV."]}},
+{id:"obyte",name:"Obyte",type:"wallet",
+ csv:{src:FIRM,steps:["Open the wallet → <b>History</b> and pick the account.","Scroll down and click <b>Download csv file</b>, then upload it."]}},
+
+/* ---------- OTHER SOFTWARE ---------- */
+{id:"cointracker",name:"CoinTracker",type:"other",
+ csv:{src:FIRM,steps:["Go to <b>Transactions</b> (cointracker.io/transactions).","Click <b>Download CSV</b> and upload it."]}},
+{id:"cointracking",name:"CoinTracking",type:"other",
+ csv:{src:FIRM,steps:["Hover <b>Enter Coins</b> → <b>Overview &amp; Manual Import</b>.","Click <b>Export</b> → CSV and upload it."]}},
+{id:"cryptotax",name:"CryptoTax",type:"other",
+ csv:{src:FIRM,steps:["Go to <b>Trades → Export Trades</b> and upload the file."]}},
+{id:"delta",name:"Delta",type:"other",
+ csv:{src:FIRM,steps:["In the mobile app: <b>Settings → Sync Data → Sync from this Device</b>.","Install Delta desktop and scan the QR code.","On desktop: <b>Settings → Export transactions to CSV file</b>, then upload it."]}},
+{id:"osl",name:"OSL",type:"other",
+ csv:{src:FIRM,steps:["Ask your OSL contact for the Excel export.","Upload it unopened and unchanged."]}},
+{id:"manual",name:"Manual Entry Spreadsheet",type:"other",aka:"unsupported other template",
+ csv:{src:FIRM,steps:["Go to the <a href=\"#manual-entry\">Manual Entry Spreadsheet</a> section at the bottom of this page.","Click <b>Download template</b>, fill it in with Excel or Google Sheets and save it as CSV.","Make one file per unsupported source and upload each one to ShareFile."]}}
+];
+
+const GROUPS=[["exchange","Exchanges"],["wallet","Wallets & blockchains"],["other","Other software & manual entry"]];
+const state={q:"",type:"all",m:new Set()};
+try{const t=localStorage.getItem("pg-type");if(t)state.type=t;}catch(e){}
+
+const strip=h=>h.replace(/<[^>]+>/g," ");
+SOURCES.forEach(s=>{
+  s.methods=["api","csv","addr"].filter(k=>s[k]);
+  s.hay=[s.name,s.aka||"",...(s.flags||[]),...(s.warn||[]),...s.methods.flatMap(k=>s[k].steps.map(strip))].join(" ").toLowerCase();
+});
+
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hl=(text,q)=>!q?esc(text):esc(text).replace(new RegExp("("+q.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","ig"),"<mark>$1</mark>");
+const LABEL={api:"API key",csv:"CSV / file export",addr:"Public address / XPUB"};
+const TAG={api:"API",csv:"CSV",addr:"Address"};
+
+function srcNote(src){return src.url?`<span class="src-note">Source: <a href="${src.url}" target="_blank" rel="noopener">${src.label}</a></span>`:`<span class="src-note">Source: ${src.label}</span>`;}
+
+const MONO={evm:"0x",bitcoin:"BTC",solana:"SOL","other-chains":"L1","bitcoin-core":"BC",manual:"✎","binance-us":"BU","coinbase-pro":"CP","kraken-futures":"KF",cryptocom:"CR",htx:"HT"};
+function mono(s){
+  if(MONO[s.id])return MONO[s.id];
+  const w=s.name.replace(/\(.*?\)/g,"").split(/[\s.\-&\/]+/).filter(Boolean);
+  return w.length>1?(w[0][0]+w[1][0]).toUpperCase():w[0][0].toUpperCase()+w[0][1].toLowerCase();
+}
+function card(s,q,open){
+  const tags=s.methods.map(k=>`<span class="tag t-${k}">${TAG[k]}</span>`).join("")+(s.flags||[]).map(f=>`<span class="tag t-flag">${esc(f)}</span>`).join("");
+  const warn=s.warn?`<div class="warn"><strong>Heads-up</strong><ul>${s.warn.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>`:"";
+  const methods=s.methods.map(k=>`<div class="method"><h3>${LABEL[k]} ${srcNote(s[k].src)}</h3><ol>${s[k].steps.map(x=>`<li>${x}</li>`).join("")}</ol></div>`).join("");
+  return `<details class="src" id="${s.id}"${open?" open":""}><summary><span class="caret" aria-hidden="true">▸</span><span class="badge b-${s.type}" aria-hidden="true">${esc(mono(s))}</span><span class="name">${hl(s.name,q)}</span>${tags}</summary><div class="body">${warn}${methods}</div></details>`;
+}
+
+function render(){
+  const q=state.q.trim().toLowerCase();
+  const hash=decodeURIComponent(location.hash.slice(1));
+  let html="",n=0;
+  for(const [g,label] of GROUPS){
+    if(state.type!=="all"&&state.type!==g)continue;
+    const items=SOURCES.filter(s=>s.type===g&&(!q||s.hay.includes(q))&&[...state.m].every(m=>s.methods.includes(m)));
+    if(!items.length)continue;
+    n+=items.length;
+    html+=`<section class="group"><h2>${label}<small>${items.length}</small></h2>${items.map(s=>card(s,q,(q&&items.length<=3)||s.id===hash)).join("")}</section>`;
+  }
+  document.getElementById("list").innerHTML=html;
+  document.getElementById("empty").hidden=n>0;
+  document.getElementById("count").textContent=n+" of "+SOURCES.length+" sources";
+  document.querySelectorAll('.chip[data-f="type"]').forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===state.type));
+  document.querySelectorAll('.chip[data-f="m"]').forEach(b=>b.setAttribute("aria-pressed",state.m.has(b.dataset.v)));
+}
+
+document.getElementById("q").addEventListener("input",e=>{state.q=e.target.value;render();});
+document.getElementById("chips").addEventListener("click",e=>{
+  const b=e.target.closest(".chip");if(!b)return;
+  if(b.dataset.f==="type"){state.type=b.dataset.v;try{localStorage.setItem("pg-type",state.type);}catch(err){}}
+  else{state.m.has(b.dataset.v)?state.m.delete(b.dataset.v):state.m.add(b.dataset.v);}
+  render();
+});
+document.addEventListener("click",e=>{
+  const b=e.target.closest(".copy");if(!b)return;e.preventDefault();
+  const v=b.dataset.copy;
+  const done=()=>{b.textContent="Copied";setTimeout(()=>b.textContent="Copy",1400);};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(v).then(done).catch(()=>sel(b));}else sel(b);
+  function sel(btn){const r=document.createRange();r.selectNodeContents(btn.parentNode.firstChild);const s=getSelection();s.removeAllRanges();s.addRange(r);}
+});
+window.addEventListener("hashchange",()=>{render();const el=document.getElementById(location.hash.slice(1));if(el)el.scrollIntoView({block:"start"});});
+/* ---------- Manual Entry template ---------- */
+const BASE=["Type","Buy Amount","Buy Currency","Sell Amount","Sell Currency","Fee","Fee Currency","Exchange","Trade-Group","Comment","Date"];
+const OPTC=["Liquidity pool (optional)","Tx-ID (optional)","Buy Value in Account Currency (optional)","Sell Value in Account Currency (optional)"];
+const status=document.getElementById("me-status");
+function setStatus(msg,cls){status.className="status"+(cls?" "+cls:"");status.innerHTML=msg;}
+const header=cols=>cols.map(c=>'"'+c+'"').join(",")+"\r\n";
+function tpl(cols,filename){
+  try{
+    const blob=new Blob(["\ufeff"+header(cols)],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    setStatus("Template downloaded. Fill it in, save it as CSV, and upload it to ShareFile.","ok");
+  }catch(e){setStatus("The download didn't start. Try a different browser, or copy the column names from the guide below.","err");}
+}
+document.getElementById("me-tpl").addEventListener("click",()=>tpl(BASE,"Manual Entry Template.csv"));
+document.getElementById("me-tpl-opt").addEventListener("click",()=>tpl(BASE.concat(OPTC),"Manual Entry Template (with optional columns).csv"));
+
+try{document.getElementById("last-updated").textContent=new Date(LAST_UPDATED+"T00:00:00").toLocaleDateString(undefined,{year:"numeric",month:"long",day:"numeric"});}catch(e){}
+render();
+if(location.hash){const el=document.getElementById(location.hash.slice(1));if(el)el.scrollIntoView({block:"start"});}
+</script>
+
+</body></html>
