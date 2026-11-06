@@ -128,6 +128,18 @@ def main():
                 except Exception:
                     pass
             found = sorted(found)
+            if not found and os.environ.get("DEBUG_IPS"):
+                for variant in VARIANTS:
+                    try:
+                        r = fetch(slug, offline, variant)
+                    except Exception as e:
+                        print(f"[debug] {slug}{variant}: fetch error {e}")
+                        continue
+                    hits = [m.start() for m in re.finditer(r"\bIPs?\b", r)][:6]
+                    any_ip = sorted(set(re.findall(IPV4, r)))[:8]
+                    print(f"[debug] {slug}{variant}: {len(r)} bytes; IPv4s anywhere: {any_ip}; site IP present: {ips[slug] in r}")
+                    for h in hits[:4]:
+                        print("   ...", re.sub(r"\s+", " ", r[max(0, h - 60):h + 100]))
             if len(found) == 1 and found[0] != ips[slug]:
                 ip_changes.append((slug, ips[slug], found[0], url))
                 ips[slug] = found[0]

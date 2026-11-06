@@ -26,6 +26,8 @@ jobs:
       - name: Check CoinTracking pages for IP and instruction changes
         id: check
         run: python scripts/check_sources.py
+        env:
+          DEBUG_IPS: ${{ github.event_name == 'workflow_dispatch' && '1' || '' }}
 
       - name: Open a change request for approval
         if: steps.check.outputs.changed == 'true'
