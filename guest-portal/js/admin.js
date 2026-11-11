@@ -63,6 +63,7 @@
   function renderMain() {
     const main = document.getElementById('main');
     if (!main) return;
+    BLANKS = [];
     main.innerHTML = VIEWS[tab]();
     (BINDERS[tab] || (() => { }))(main);
   }
@@ -234,9 +235,9 @@
       if (sel.propertyIdx >= d.properties.length) sel.propertyIdx = 0;
       const p = d.properties[sel.propertyIdx];
       return `<div class="a-head row"><div><h1>Properties</h1><p class="muted">Edit everything guests see. Changes save automatically.</p></div>
-          <div class="btn-row"><button class="btn ghost" id="dupProp">${icon('copy')} Duplicate</button><button class="btn primary" id="addProp">${icon('plus')} Add property</button></div></div>
+          <div class="btn-row"><button class="btn ghost" id="propQr">${icon('qr')} Guest guide link</button><button class="btn ghost" id="dupProp">${icon('copy')} Duplicate</button><button class="btn primary" id="addProp">${icon('plus')} Add property</button></div></div>
         <div class="chips">${d.properties.map((x, i) => `<button class="chip ${i === sel.propertyIdx ? 'on' : ''}" data-pidx="${i}">${esc(x.name.en || 'Untitled')}</button>`).join('')}</div>
-        ${p ? `<div class="editor">${PROP_SECTIONS.map((sec, i) => sectionHTML(sec, `properties.${sel.propertyIdx}`, i === 0)).join('')}</div>
+        ${p ? `<div class="editor">${PROP_SECTIONS.map(sec => sectionHTML(sec, `properties.${sel.propertyIdx}`)).join('')}</div>
         <button class="btn danger-ghost" id="delProp">${icon('trash')} Delete this property</button>` : ''}`;
     },
 
@@ -250,7 +251,7 @@
 
     settings() {
       return `<div class="a-head"><h1>Settings</h1><p class="muted">Brand, contact details and security. Changes save automatically.</p></div>
-        <div class="editor">${SETTINGS_SECTIONS.map((s, i) => sectionHTML(s, 'settings', i === 0)).join('')}</div>
+        <div class="editor">${SETTINGS_SECTIONS.map(sec => sectionHTML(sec, 'settings')).join('')}</div>
         <section class="panel"><h2>Backup & demo data</h2>
           <p class="muted">Download all your content as a file, or restore it. Useful before moving to a live server.</p>
           <div class="btn-row"><button class="btn ghost" id="exportBtn">${icon('down')} Export backup</button>
@@ -338,7 +339,8 @@
         if (!(await askConfirm(`Delete "${p.name.en}"? This cannot be undone.`, { danger: true, ok: 'Delete' }))) return;
         Store.update(d => d.properties.splice(sel.propertyIdx, 1)); sel.propertyIdx = 0; renderMain();
       };
-      bindEditor(main, PROP_SECTIONS);
+      bindEditor(main);
+      main.querySelector('#propQr').onclick = () => propertyQr(D().properties[sel.propertyIdx]);
     },
     guestbook(main) {
       main.querySelectorAll('[data-gb]').forEach(b => b.onclick = async () => {
@@ -352,7 +354,7 @@
       });
     },
     settings(main) {
-      bindEditor(main, SETTINGS_SECTIONS);
+      bindEditor(main);
       main.querySelector('#exportBtn').onclick = () => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([JSON.stringify(D(), null, 2)], { type: 'application/json' }));
@@ -474,31 +476,61 @@
 
   // ================= generic content editor =================
   const BI = (k, label, area) => ({ k, label, t: area ? 'bi-area' : 'bi' });
-  const IMG = { k: 'image', label: 'Photo', t: 'image' };
+  const IMG = (k = 'image', label = 'Photo') => ({ k, label, t: 'image' });
+  const ICON = { k: 'icon', label: 'Icon', t: 'icon' };
+  const safeSum = fn => x => { try { return fn(x); } catch (e) { return ''; } };
+  const BUILTIN_TARGETS = [
+    ['wifi', 'Wi-Fi (private)'], ['host', 'Host contact (private)'], ['checkin', 'Check in'], ['checkout', 'Checkout'],
+    ['extras', 'Extras & experiences'], ['rules', 'House rules'], ['guide', 'Local guide'], ['emergency', 'Safety & emergency'],
+    ['problems', 'Common problems'], ['tutorials', 'Tutorials list'], ['requests', 'Requests'], ['help', 'Request or report'],
+    ['housekeeping', 'Housekeeping'], ['stay', 'Early in / late out'], ['luggage', 'Luggage storage'], ['lostfound', 'Lost & found'], ['guestbook', 'Guestbook'],
+  ];
+  const TILE_ITEM = [{ k: 'target', label: 'Opens', t: 'target' }, ICON, { k: 'color', label: 'Icon color', t: 'select', options: TILE_COLORS }, BI('title', 'Title'), BI('sub', 'Short description')];
+  const tileList = (k, label) => ({ k, label, t: 'list', item: TILE_ITEM, blank: () => ({ target: 'rules', icon: 'star', color: 'beige', title: bi(''), sub: bi('') }), sum: safeSum(x => x.title.en) });
+  const newPageId = () => 'pg' + Math.random().toString(36).slice(2, 7);
+  const PAGE_ITEM = [
+    { t: 'note', text: x => `Guests open this page at #p-${x.id}. Point a home tile or photo card to "Page: ${x.title.en}".` },
+    BI('title', 'Page title'), BI('category', 'Category label (e.g. Kitchen, Arrival)'), BI('summary', 'Short summary', 1), ICON, IMG('cover', 'Cover photo'),
+    { k: 'inTutorials', label: 'Show in the Tutorials list', t: 'bool' },
+    { k: 'private', label: 'Private: hide until the guest is confirmed and inside the unlock window', t: 'bool' },
+    { k: 'showDoorCode', label: 'Show the door code on this page (after online check-in)', t: 'bool' },
+    { k: 'infoCards', label: 'Info cards (hours, closed days, access…)', t: 'list', item: [BI('label', 'Label'), BI('text', 'Text')], blank: () => ({ label: bi(''), text: bi('') }), sum: safeSum(x => x.label.en) },
+    { k: 'gallery', label: 'Photo walk-through (guests swipe)', t: 'list', item: [IMG(), BI('caption', 'Caption')], blank: () => ({ image: '', caption: bi('') }), sum: safeSum(x => x.caption.en) },
+    { k: 'steps', label: 'Numbered steps', t: 'list', item: [BI('title', 'Step title'), BI('text', 'Instructions', 1), IMG()], blank: () => ({ title: bi(''), text: bi(''), image: '' }), sum: safeSum(x => x.title.en) },
+    { k: 'video', label: 'Video link (YouTube, Google Drive, or a direct .mp4 link)', t: 'text' },
+    { k: 'lists', label: 'Lists (e.g. Before swimming, Extra guests)', t: 'list', item: [BI('title', 'List title'), { k: 'tone', label: 'Style', t: 'select', options: [['plain', 'Plain'], ['sage', 'Green highlight']] }, BI('items', 'Items, one per line', 1)], blank: () => ({ title: bi(''), tone: 'plain', items: bi('') }), sum: safeSum(x => x.title.en) },
+  ];
+  const simpleBi = (label) => ({ item: [BI('', label)], blank: () => bi(''), sum: safeSum(x => x.en) });
+
   const PROP_SECTIONS = [
-    { title: 'Basics', ic: 'building', fields: [BI('name', 'Property name'), { k: 'address', label: 'Address', t: 'text' }, { k: 'heroImage', label: 'Cover photo', t: 'image' }, BI('welcome', 'Welcome message', 1), { k: 'checkInTime', label: 'Check-in time', t: 'time' }, { k: 'checkOutTime', label: 'Check-out time', t: 'time' }, { k: 'mapUrl', label: 'Google Maps link (directions)', t: 'text' }, { k: 'reviewUrl', label: 'Review link (e.g. your Airbnb listing)', t: 'text' }, { k: 'requireId', label: 'Require an ID photo at check-in', t: 'bool' }] },
-    { title: 'Door code & Wi-Fi', ic: 'key', fields: [{ k: 'doorCode', label: 'Door / lockbox code (shown only after the guest checks in)', t: 'text' }, { k: 'wifi.ssid', label: 'Wi-Fi network name', t: 'text' }, { k: 'wifi.password', label: 'Wi-Fi password', t: 'text' }] },
-    { title: 'Self check-in steps', ic: 'key', list: 'selfCheckIn', item: [BI('title', 'Step title'), BI('text', 'Instructions', 1), IMG], blank: () => ({ title: bi('', ''), text: bi('', ''), image: '' }), sum: x => x.title.en },
-    { title: 'House rules', ic: 'book', list: 'rules', item: [BI('', 'Rule')], blank: () => bi('', ''), sum: x => x.en },
-    { title: 'How-to guides (appliances)', ic: 'tool', list: 'appliances', item: [BI('name', 'Appliance'), BI('steps', 'Steps — one per line', 1), IMG], blank: () => ({ name: bi('', ''), steps: bi('', ''), image: '' }), sum: x => x.name.en },
-    { title: 'Trash & recycling', ic: 'trash', fields: [BI('trash', 'Instructions (one per line)', 1)] },
-    { title: 'Local guide', ic: 'pin', list: 'localGuide', item: [BI('category', 'Category (e.g. Food)'), { k: 'name', label: 'Place name', t: 'text' }, BI('desc', 'Description', 1), { k: 'mapUrl', label: 'Google Maps link', t: 'text', mapFrom: 'name' }, IMG], blank: () => ({ category: bi('', ''), name: '', desc: bi('', ''), mapUrl: '', image: '' }), sum: x => x.name },
-    { title: 'Add-on services & prices', ic: 'coffee', list: 'services', item: [BI('name', 'Service name'), BI('desc', 'Description', 1), { k: 'price', label: 'Price', t: 'number' }, BI('unit', 'Price unit (e.g. per day)'), IMG], blank: () => ({ name: bi('', ''), desc: bi('', ''), price: 0, unit: bi('', ''), image: '' }), sum: x => `${x.name.en} — ${money(x.price)}` },
-    { title: 'Request items (quick picks)', ic: 'message', list: 'requestItems', item: [BI('', 'Item')], blank: () => bi('', ''), sum: x => x.en },
-    { title: 'Issue types', ic: 'alert', list: 'issueTypes', item: [BI('', 'Issue type')], blank: () => bi('', ''), sum: x => x.en },
-    { title: 'Housekeeping options', ic: 'droplet', list: 'housekeepingOptions', item: [BI('', 'Option')], blank: () => bi('', ''), sum: x => x.en },
+    { title: 'Basics', ic: 'building', fields: [BI('name', 'Property name'), BI('welcomeLine', 'Welcome line (script text on the cover)'), BI('tagline', 'Tagline'), { k: 'location', label: 'Location shown on the cover', t: 'text' }, { k: 'address', label: 'Full address', t: 'text' }, IMG('heroImage', 'Home cover photo'), { k: 'checkInTime', label: 'Check-in time', t: 'time' }, { k: 'checkOutTime', label: 'Check-out time', t: 'time' }, { k: 'unlockHours', label: 'Unlock private details this many hours before check-in', t: 'number' }, { k: 'mapUrl', label: 'Google Maps link (directions)', t: 'text' }, { k: 'reviewUrl', label: 'Review link (e.g. your Airbnb listing)', t: 'text' }, { k: 'requireId', label: 'Require an ID photo at online check-in', t: 'bool' }] },
+    { title: 'Private details (door code, Wi-Fi, host)', ic: 'lock', hint: 'Guests see these only after confirming their reservation, inside the unlock window. The door code also needs online check-in.', fields: [{ k: 'doorCode', label: 'Door / lockbox code', t: 'text' }, { k: 'wifi.ssid', label: 'Wi-Fi network name', t: 'text' }, { k: 'wifi.password', label: 'Wi-Fi password', t: 'text' }, BI('wifiNote', 'Wi-Fi note', 1), BI('hostNote', 'Host contact note', 1)] },
+    { title: 'Home · tile sections', ic: 'grid', hint: 'The "Start here" card. Each section has a label and a grid of icon tiles.', list: 'homeSections', item: [BI('title', 'Section label'), tileList('tiles', 'Tiles')], blank: () => ({ title: bi(''), tiles: [] }), sum: safeSum(x => x.title.en) },
+    { title: 'Home · photo cards', ic: 'image', list: 'features', item: [{ k: 'target', label: 'Opens', t: 'target' }, IMG('image', 'Photo (empty = use the page cover)'), BI('eyebrow', 'Small line on top'), BI('title', 'Title'), BI('text', 'Text', 1), BI('button', 'Button label')], blank: () => ({ target: 'extras', image: '', eyebrow: bi(''), title: bi(''), text: bi(''), button: bi('View details', 'Tingnan') }), sum: safeSum(x => x.title.en) },
+    { title: 'Home · swipe panels', ic: 'list', list: 'panels', item: [BI('eyebrow', 'Small label'), BI('title', 'Title'), BI('text', 'Text', 1), tileList('tiles', 'Rows (the first one is dark)')], blank: () => ({ eyebrow: bi(''), title: bi(''), text: bi(''), tiles: [] }), sum: safeSum(x => x.title.en) },
+    { title: 'Guide pages & tutorials', ic: 'book', hint: 'Pool, trash, sofa bed, kitchen… Each page can have a cover photo, info cards, a photo walk-through, numbered steps, a video and lists.', list: 'pages', item: PAGE_ITEM, blank: () => ({ id: newPageId(), icon: 'book', category: bi(''), title: bi('New page', 'Bagong page'), summary: bi(''), cover: '', inTutorials: true, private: false, showDoorCode: false, video: '', infoCards: [], gallery: [], steps: [], lists: [] }), sum: safeSum(x => `${x.title.en}${x.inTutorials ? ' · Tutorial' : ''}${x.private ? ' · Private' : ''}`) },
+    { title: 'Extras & experiences', ic: 'sparkle', fields: [IMG('extrasCover', 'Extras page cover photo')], list: 'services', item: [ICON, BI('name', 'Name'), BI('category', 'Category (used for filters)'), BI('tag', 'Tag (e.g. Host-arranged, Partner service)'), BI('desc', 'Description', 1), BI('priceText', 'Price text (e.g. Ask for rate, ₱600 per trip)'), { k: 'price', label: 'Price for estimates (0 = no estimate)', t: 'number' }, BI('note', 'Note (e.g. Request 1 day ahead)'), IMG()], blank: () => ({ icon: 'sparkle', name: bi(''), category: bi(''), tag: bi(''), desc: bi(''), priceText: bi(''), price: 0, note: bi(''), image: '' }), sum: safeSum(x => `${x.name.en} · ${x.priceText.en || money(x.price)}`) },
+    { title: 'Safety & emergency contacts', ic: 'siren', fields: [BI('notice.title', 'Notice title (e.g. Generator information)'), BI('notice.text', 'Notice text', 1)], list: 'emergency', item: [ICON, BI('label', 'Name'), BI('desc', 'Description'), { k: 'phones', label: 'Phone numbers, separated by commas', t: 'text' }, { k: 'mapUrl', label: 'Map link (optional)', t: 'text' }], blank: () => ({ icon: 'siren', label: bi(''), desc: bi(''), phones: '', mapUrl: '' }), sum: safeSum(x => x.label.en) },
+    { title: 'Emergency procedures', ic: 'flame', list: 'procedures', item: [BI('title', 'Title'), BI('text', 'What to do', 1)], blank: () => ({ title: bi(''), text: bi('') }), sum: safeSum(x => x.title.en) },
+    { title: 'Common problems', ic: 'help', list: 'problems', item: [BI('q', 'Problem'), BI('a', 'Quick fix', 1)], blank: () => ({ q: bi(''), a: bi('') }), sum: safeSum(x => x.q.en) },
+    { title: 'House rules', ic: 'lock', list: 'rules', ...simpleBi('Rule') },
+    { title: 'Local guide', ic: 'pin', list: 'localGuide', item: [BI('category', 'Category (e.g. Food)'), { k: 'name', label: 'Place name', t: 'text' }, BI('desc', 'Description', 1), { k: 'mapUrl', label: 'Google Maps link', t: 'text', mapFrom: 'name' }, IMG()], blank: () => ({ category: bi(''), name: '', desc: bi(''), mapUrl: '', image: '' }), sum: safeSum(x => x.name) },
+    { title: 'Request items (quick picks)', ic: 'message', list: 'requestItems', ...simpleBi('Item') },
+    { title: 'Issue types', ic: 'alert', list: 'issueTypes', ...simpleBi('Issue type') },
+    { title: 'Housekeeping options', ic: 'concierge', list: 'housekeepingOptions', ...simpleBi('Option') },
     { title: 'Housekeeping time slots', ic: 'clock', list: 'housekeepingSlots', item: [{ k: '', label: 'Time slot', t: 'text' }], blank: () => '', sum: x => x },
     { title: 'Early check-in / late checkout policy', ic: 'clock', fields: [BI('stayPolicy', 'Policy shown to guests', 1)] },
-    { title: 'Emergency contacts', ic: 'phone', list: 'emergency', item: [BI('label', 'Label'), { k: 'phone', label: 'Phone number', t: 'text' }, { k: 'mapUrl', label: 'Map link (optional)', t: 'text' }], blank: () => ({ label: bi('', ''), phone: '', mapUrl: '' }), sum: x => x.label.en },
-    { title: 'Check-out checklist', ic: 'check', list: 'checkoutChecklist', item: [BI('', 'Checklist item')], blank: () => bi('', ''), sum: x => x.en },
+    { title: 'Checkout checklist', ic: 'check', list: 'checkoutChecklist', ...simpleBi('Checklist item') },
   ];
   const SETTINGS_SECTIONS = [
-    { title: 'Brand', ic: 'building', fields: [{ k: 'brandName', label: 'Brand name', t: 'text' }, BI('tagline', 'Tagline (login screen)'), { k: 'accent', label: 'Accent color', t: 'color' }] },
-    { title: 'Host contact', ic: 'phone', fields: [{ k: 'hostName', label: 'Host name (shown to guests)', t: 'text' }, { k: 'hostPhone', label: 'Phone (guests can tap to call)', t: 'text' }, { k: 'hostEmail', label: 'Email', t: 'text' }] },
+    { title: 'Brand', ic: 'building', fields: [{ k: 'brandName', label: 'Brand name', t: 'text' }, BI('tagline', 'Tagline'), { k: 'accent', label: 'Button color', t: 'color' }] },
+    { title: 'Host contact', ic: 'phone', fields: [{ k: 'hostName', label: 'Host name (shown to guests)', t: 'text' }, { k: 'hostPhone', label: 'Phone', t: 'text' }, { k: 'hostEmail', label: 'Email', t: 'text' }] },
     { title: 'Currency & admin PIN', ic: 'key', fields: [{ k: 'currency', label: 'Currency symbol', t: 'text' }, { k: 'adminPin', label: 'Admin PIN', t: 'text' }] },
     { title: 'Quick replies', ic: 'message', list: 'quickReplies', item: [{ k: '', label: 'Reply text', t: 'text' }], blank: () => '', sum: x => x },
   ];
 
+  const openKeys = new Set(['sec:Basics', 'sec:Brand']);
+  let BLANKS = [];
   const join = (a, b) => (b === '' ? a : `${a}.${b}`);
   function getPath(o, path) { return path.split('.').reduce((x, k) => (x == null ? x : x[k]), o); }
   function setPath(o, path, val) {
@@ -507,53 +539,69 @@
     for (let i = 0; i < ks.length - 1; i++) { if (x[ks[i]] == null) x[ks[i]] = /^\d+$/.test(ks[i + 1]) ? [] : {}; x = x[ks[i]]; }
     x[ks[ks.length - 1]] = val;
   }
+  function targetOptions(selected) {
+    const p = D().properties[sel.propertyIdx] || { pages: [] };
+    const opts = [...BUILTIN_TARGETS, ...(p.pages || []).map(pg => ['p-' + pg.id, 'Page: ' + (pg.title.en || pg.id)])];
+    if (selected && !opts.some(o => o[0] === selected)) opts.push([selected, selected + ' (missing)']);
+    return opts.map(([v, l]) => `<option value="${esc(v)}" ${v === selected ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  }
 
   function fieldHTML(f, base) {
-    const path = join(base, f.k), v = getPath(D(), path);
-    const lab = `<span class="f-label">${esc(f.label)}</span>`;
+    const path = join(base, f.k || ''), v = f.k == null ? undefined : getPath(D(), path);
+    const lab = `<span class="f-label">${esc(f.label || '')}</span>`;
     switch (f.t) {
+      case 'note': return `<p class="muted small">${esc(f.text(getPath(D(), base)))}</p>`;
+      case 'list': return `<div class="field">${lab}${listHTML(path, f)}</div>`;
       case 'bi': case 'bi-area': {
-        const ctl = (l, sub) => f.t === 'bi' ? `<input class="input" data-path="${path}.${sub}" value="${esc(v && v[sub])}">` : `<textarea class="input" rows="3" data-path="${path}.${sub}">${esc(v && v[sub])}</textarea>`;
-        return `<div class="field">${lab}<div class="bi"><label><small>EN</small>${ctl('EN', 'en')}</label><label><small>FIL</small>${ctl('FIL', 'fil')}</label></div></div>`;
+        const ctl = sub => f.t === 'bi' ? `<input class="input" data-path="${path}.${sub}" value="${esc(v && v[sub])}">` : `<textarea class="input" rows="3" data-path="${path}.${sub}">${esc(v && v[sub])}</textarea>`;
+        return `<div class="field">${lab}<div class="bi"><label><small>EN</small>${ctl('en')}</label><label><small>FIL</small>${ctl('fil')}</label></div></div>`;
       }
       case 'bool': return `<label class="check field"><input type="checkbox" data-path="${path}" data-kind="bool" ${v ? 'checked' : ''}> <span>${esc(f.label)}</span></label>`;
       case 'number': return `<label class="field">${lab}<input class="input" type="number" min="0" data-path="${path}" data-kind="number" value="${esc(v)}"></label>`;
       case 'time': return `<label class="field">${lab}<input class="input" type="time" data-path="${path}" value="${esc(v)}"></label>`;
-      case 'color': return `<label class="field">${lab}<input class="input color" type="color" data-path="${path}" value="${esc(v || '#29453a')}"></label>`;
+      case 'color': return `<label class="field">${lab}<input class="input color" type="color" data-path="${path}" value="${esc(v || '#1f2a44')}"></label>`;
+      case 'select': return `<label class="field">${lab}<select class="input" data-path="${path}" data-rerender="1">${f.options.map(o => { const [ov, ol] = Array.isArray(o) ? o : [o, o[0].toUpperCase() + o.slice(1)]; return `<option value="${esc(ov)}" ${ov === v ? 'selected' : ''}>${esc(ol)}</option>`; }).join('')}</select></label>`;
+      case 'target': return `<label class="field">${lab}<select class="input" data-path="${path}" data-rerender="1">${targetOptions(v)}</select></label>`;
+      case 'icon': return `<div class="field">${lab}<div class="icon-pick"><span class="sq-ic beige">${icon(v || 'grid')}</span><select class="input" data-path="${path}" data-rerender="1">${Object.keys(ICONS).map(n => `<option ${n === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>`;
       case 'image': return `<div class="field">${lab}<div class="img-ed">
           ${v ? `<img src="${esc(v)}" alt="">` : `<div class="img-ph">${icon('camera')}</div>`}
           <div class="stack sm"><label class="btn ghost sm">${icon('up')} Upload<input type="file" accept="image/*" data-img="${path}" hidden></label>
-          <input class="input" placeholder="…or paste an image URL" data-path="${path}" value="${v && !String(v).startsWith('data:') ? esc(v) : ''}">
+          <input class="input" placeholder="…or paste an image link" data-path="${path}" value="${v && !String(v).startsWith('data:') ? esc(v) : ''}">
           ${v ? `<button class="link danger" data-clear="${path}">Remove photo</button>` : ''}</div></div></div>`;
       default: return `<label class="field">${lab}<div class="inline"><input class="input" data-path="${path}" value="${esc(v)}">${f.mapFrom ? `<button class="btn ghost sm" data-mapfrom="${join(base, f.mapFrom)}|${path}" title="Create a Google Maps search link from the place name">${icon('pin')} Auto</button>` : ''}</div></label>`;
     }
   }
 
-  function sectionHTML(sec, base, open) {
-    let body;
-    if (sec.list) {
-      const lp = join(base, sec.list), items = getPath(D(), lp) || [];
-      body = `${items.map((it, i) => `<div class="li-ed"><div class="li-ed-head"><b>${i + 1}. ${esc((sec.sum && sec.sum(it)) || 'Untitled')}</b>
-          <span><button class="icon-btn sm" data-move="${lp}|${i}|-1" ${i === 0 ? 'disabled' : ''} title="Move up">${icon('up')}</button><button class="icon-btn sm" data-move="${lp}|${i}|1" ${i === items.length - 1 ? 'disabled' : ''} title="Move down">${icon('down')}</button><button class="icon-btn sm" data-del="${lp}|${i}" title="Remove">${icon('trash')}</button></span></div>
-          ${sec.item.map(f => fieldHTML(f, `${lp}.${i}`)).join('')}</div>`).join('')}
-        <button class="btn ghost sm" data-add="${lp}" data-sec="${esc(sec.title)}">${icon('plus')} Add</button>`;
-    } else body = sec.fields.map(f => fieldHTML(f, base)).join('');
-    return `<details class="panel ed-sec" ${open ? 'open' : ''} data-title="${esc(sec.title)}"><summary>${icon(sec.ic || 'pen')}<span>${esc(sec.title)}</span>${sec.list ? `<small class="muted">${(getPath(D(), join(base, sec.list)) || []).length}</small>` : ''}${icon('down', 'chev')}</summary><div class="ed-body">${body}</div></details>`;
+  function listHTML(lp, f) {
+    const items = getPath(D(), lp) || [];
+    const bk = BLANKS.push(f.blank) - 1;
+    const collapsible = f.item.length > 2;
+    const rows = items.map((it, i) => {
+      const key = `${lp}.${i}`;
+      const btns = `<span><button class="icon-btn sm" data-move="${lp}|${i}|-1" ${i === 0 ? 'disabled' : ''} title="Move up">${icon('up')}</button><button class="icon-btn sm" data-move="${lp}|${i}|1" ${i === items.length - 1 ? 'disabled' : ''} title="Move down">${icon('down')}</button><button class="icon-btn sm" data-del="${lp}|${i}" title="Remove">${icon('trash')}</button></span>`;
+      const head = `<b>${i + 1}. ${esc((f.sum && f.sum(it)) || 'Untitled')}</b>${btns}`;
+      const fields = f.item.map(x => fieldHTML(x, key)).join('');
+      return collapsible
+        ? `<details class="li-ed" data-key="${key}" ${openKeys.has(key) ? 'open' : ''}><summary class="li-ed-head">${head}</summary><div class="li-body">${fields}</div></details>`
+        : `<div class="li-ed"><div class="li-ed-head">${head}</div>${fields}</div>`;
+    }).join('');
+    return `<div class="sub-list">${rows}<button class="btn ghost sm" data-add="${lp}" data-blank="${bk}">${icon('plus')} Add</button></div>`;
   }
 
-  function bindEditor(main, sections) {
-    // remember which sections are open across re-renders
-    const openTitles = () => [...main.querySelectorAll('details.ed-sec[open]')].map(d => d.dataset.title);
-    const rerender = () => {
-      const keep = openTitles(), y = window.scrollY;
-      renderMain();
-      const m = document.getElementById('main');
-      m.querySelectorAll('details.ed-sec').forEach(d => { d.open = keep.includes(d.dataset.title); });
-      window.scrollTo(0, y);
-    };
-    const saved = () => { const el = document.getElementById('savedFlag') || Object.assign(document.body.appendChild(document.createElement('div')), { id: 'savedFlag', className: 'saved-flag' }); el.textContent = '✓ Saved'; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1200); };
+  function sectionHTML(sec, base) {
+    const key = 'sec:' + sec.title;
+    let body = sec.hint ? `<p class="muted small">${esc(sec.hint)}</p>` : '';
+    if (sec.fields) body += sec.fields.map(f => fieldHTML(f, base)).join('');
+    if (sec.list) body += listHTML(join(base, sec.list), sec);
+    const count = sec.list ? (getPath(D(), join(base, sec.list)) || []).length : '';
+    return `<details class="panel ed-sec" data-key="${esc(key)}" ${openKeys.has(key) ? 'open' : ''}><summary>${icon(sec.ic || 'pen')}<span>${esc(sec.title)}</span>${sec.list ? `<small class="muted">${count}</small>` : ''}${icon('down', 'chev')}</summary><div class="ed-body">${body}</div></details>`;
+  }
 
+  function bindEditor(main) {
+    const rerender = () => { const y = window.scrollY; BLANKS = []; renderMain(); window.scrollTo(0, y); };
+    const saved = () => { const el = document.getElementById('savedFlag') || Object.assign(document.body.appendChild(document.createElement('div')), { id: 'savedFlag', className: 'saved-flag' }); el.textContent = '✓ Saved'; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1200); };
     const ed = main.querySelector('.editor');
+    ed.addEventListener('toggle', e => { const k = e.target.dataset && e.target.dataset.key; if (k) e.target.open ? openKeys.add(k) : openKeys.delete(k); }, true);
     ed.addEventListener('change', async e => {
       const el = e.target;
       if (el.dataset.img) {
@@ -567,7 +615,8 @@
       if (el.dataset.kind === 'number') val = +el.value || 0;
       if (Store.update(d => setPath(d, el.dataset.path, val))) {
         saved();
-        if (el.dataset.path.startsWith('settings.')) { applyTheme(S()); }
+        if (el.dataset.path.startsWith('settings.')) applyTheme(S());
+        if (el.dataset.rerender) rerender();
       }
     });
     ed.addEventListener('click', async e => {
@@ -575,8 +624,9 @@
       if (!b) return;
       e.preventDefault();
       if (b.dataset.add) {
-        const sec = sections.find(s => s.title === b.dataset.sec);
-        Store.update(d => { const arr = getPath(d, b.dataset.add) || []; arr.push(sec.blank()); setPath(d, b.dataset.add, arr); });
+        let idx = 0;
+        Store.update(d => { const arr = getPath(d, b.dataset.add) || []; arr.push(BLANKS[+b.dataset.blank]()); idx = arr.length - 1; setPath(d, b.dataset.add, arr); });
+        openKeys.add(`${b.dataset.add}.${idx}`);
       } else if (b.dataset.del) {
         const [p, i] = b.dataset.del.split('|');
         if (!(await askConfirm('Remove this item?', { danger: true, ok: 'Remove' }))) return;
@@ -594,6 +644,17 @@
         Store.update(d => setPath(d, to, mapsSearch(q)));
       }
       saved(); rerender();
+    });
+  }
+
+  function propertyQr(p) {
+    const link = new URL('guest.html?p=' + encodeURIComponent(p.id), location.href).href;
+    openModal(`<h2>Guest guide link · ${esc(p.name.en)}</h2><p class="muted">Print this QR for the unit or share it in your listing. Anyone can browse the guides. Private details unlock after the guest checks in with their last name.</p>
+      <div class="qr-box"><div id="qr"></div></div>
+      <div class="copy-field"><input class="input" readonly value="${esc(link)}"><button class="btn ghost sm" id="cpLink">${icon('copy')} Copy</button></div>`, rootEl => {
+      const box = rootEl.querySelector('#qr');
+      if (window.QRCode) new QRCode(box, { text: link, width: 200, height: 200, colorDark: '#1f2a44', colorLight: '#ffffff' });
+      rootEl.querySelector('#cpLink').onclick = () => copyText(link).then(() => toast('Link copied', 'ok'));
     });
   }
 

@@ -8,27 +8,22 @@ Open `index.html` through a local web server (for example `python3 -m http.serve
 
 | Page | Access |
 | --- | --- |
-| `guest.html?code=HARBOR1` | Demo guest (Maria Santos) |
+| `guest.html` | Guest guide. Check in with last name **Santos** (or code `HARBOR1`) |
 | `admin.html` | Host dashboard, PIN `1234` |
 
 Open both in the **same browser**, in two tabs. Actions in one tab show up in the other right away.
 
 ## Guest features (English / Filipino)
 
-- Booking-code login; links and QR codes log the guest in directly
-- Stay status: countdown, night X of Y, check-out day
-- Online check-in: details, arrival time, ID photo, agreement to house rules
-- Self check-in guide; the door code is revealed only after check-in
-- Wi-Fi with copy buttons, house rules, appliance how-to guides, trash & recycling
-- Local guide with categories and Google Maps links
-- Add-on services with prices (airport transfer, breakfast, laundry, tours, rentals)
-- Requests and issue reports with quick picks, a photo and an "urgent" flag
-- Early check-in, late checkout and extend-stay requests
-- Housekeeping scheduling, luggage storage, lost & found
-- "My requests" with live status and a chat thread with the host
-- Emergency / SOS: one-tap calls and map links
-- Check-out checklist, star rating, comments and a review link
-- Guestbook, moderated by the host
+- **Open guest guide:** anyone with the property link (`guest.html?p=<property id>`) or its QR code can browse the guides.
+- **Check in with last name (or booking code):** private details unlock a set number of hours before arrival (48 by default). These are Wi-Fi with a QR code, parking, host contact, and the door code (the door code also needs online check-in).
+- **Home:** photo cover, check-in / check-out time cards, "Start here" icon tiles with lock badges, photo feature cards, host card, safety card, and swipeable "During your stay" / "Need help?" panels.
+- **Bottom menu:** Home · Tutorials · Requests · Emergency · Checkout.
+- **Guide pages and tutorials:** cover photo, info cards, a swipeable photo walk-through, numbered steps, a video, and lists (examples: pool, trash, sofa bed, kitchen, shower, aircon, parking, door access).
+- **Extras & experiences:** category filters, Host-arranged / Partner tags, flexible price text, notes, and request forms.
+- **Requests:** item or issue (with a photo and urgent flag), housekeeping, early check-in / late checkout / extend stay, luggage, lost & found. Each request has a live status and a chat with the host.
+- **Safety & emergency:** contacts with several numbers each, a notice (such as generator information) and procedures. Also a Common problems quick-fix list.
+- **Online check-in** with an ID photo, a checkout checklist with a rating, a review link, and a guestbook.
 
 ## Host dashboard
 
@@ -36,7 +31,7 @@ Open both in the **same browser**, in two tabs. Actions in one tab show up in th
 - Dashboard: guests in-house, arrivals, open requests, average rating, activity feed
 - Requests inbox: filters, statuses (New / In progress / Approved / Declined / Done), replies, editable quick replies
 - Bookings: create or edit, auto-generated code, guest link, QR code (copy, download), ready-to-send message, check-in details and ID photo, feedback
-- Properties: edit every text (EN + FIL), photo, rule, guide, service and price. Add, duplicate or delete properties. Changes save automatically.
+- Properties: edit every text (EN + FIL), home tiles, photo cards, swipe panels, guide pages (cover, steps, photo walk-through, video, lists), extras, emergency info, rules and more. Add, duplicate or delete properties, and get a printable guest-guide QR for each one. Changes save automatically.
 - Guestbook moderation, brand / colors / contact / PIN settings, backup export and import, demo reset
 
 ## Demo limitations
@@ -52,3 +47,7 @@ Data is stored in the browser (`localStorage`). That means:
 - real guest-to-host sync across devices
 - phone push notifications (installable app) and email or Telegram alerts
 - secure admin login and private ID-photo storage
+
+## Preview build
+
+`python3 tools/build-preview.py OUT.html` bundles the guest and host views into one page with a Guest / Host switch, for sharing a review link.

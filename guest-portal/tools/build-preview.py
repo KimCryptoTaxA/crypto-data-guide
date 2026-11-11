@@ -14,7 +14,7 @@ PREVIEW_CSS = """
 .pv-bar { background: var(--accent); color: #fff; padding-block: 10px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
-.pv-bar .pv-title { font: 600 1.05rem var(--serif); letter-spacing: .01em; }
+.pv-bar .pv-title { font: 800 1rem var(--display); }
 .pv-bar .pv-hint { font-size: .78rem; color: #e9dcc4; }
 .pv-switch { display: inline-flex; background: rgba(255,255,255,.12); border-radius: 999px; padding: 3px; gap: 3px; }
 .pv-switch button { position: relative; border: 0; background: transparent; color: #fff; font: 600 .82rem var(--sans);
@@ -26,7 +26,6 @@ PREVIEW_CSS = """
 """
 
 PREVIEW_SETUP = """
-try { if (!localStorage.getItem('guestportal_code')) localStorage.setItem('guestportal_code', 'HARBOR1'); } catch (e) {}
 window.PREVIEW = (function () {
   let view = 'guest';
   let seen = Store.get().notifications.length;
@@ -60,13 +59,13 @@ PREVIEW.badge();
 """
 
 html = f"""<title>Guest Portal Demo</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap">
 <style>
 {read('css/style.css')}
 {PREVIEW_CSS}
 </style>
 <div class="pv-bar">
-  <div><div class="pv-title">Guest Portal · demo preview</div><div class="pv-hint">Guest code HARBOR1 · Host PIN 1234</div></div>
+  <div><div class="pv-title">Guest Portal · demo preview</div><div class="pv-hint">Guest check-in last name: Santos · Host PIN 1234</div></div>
   <div class="pv-switch" role="tablist" aria-label="Choose view">
     <button type="button" data-v="guest" class="on">Guest view</button>
     <button type="button" data-v="host">Host view<span class="pv-badge" id="pvBadge" hidden></span></button>
