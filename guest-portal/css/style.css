@@ -507,13 +507,13 @@ blockquote.gb { margin: 0; }
 .ed-sec .ed-hint { font-weight: 400; color: var(--muted); font-size: .82rem; padding: 0 20px 0; margin: -6px 0 10px; }
 .ed-body { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--line); }
 .field { gap: 4px; }
-.bi { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.bi { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
 .bi label { gap: 4px; }
 .bi small { font-weight: 700; color: var(--sage); letter-spacing: .1em; font-size: .68rem; }
 .li-ed { border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px; background: #fff; }
 .li-ed .li-ed { background: var(--beige-soft); }
 details.li-ed { display: block; }
-details.li-ed > summary { list-style: none; cursor: pointer; }
+details.li-ed > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 details.li-ed > summary::-webkit-details-marker { display: none; }
 details.li-ed[open] > summary { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .li-body { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
@@ -584,3 +584,28 @@ body.landing { display: grid; place-items: center; min-height: 100vh; padding: 3
 .how { text-align: left; max-width: 560px; margin: 28px auto 14px; color: #4a4640; }
 .how li { margin-bottom: 6px; }
 @media (max-width: 600px) { .landing-cards { grid-template-columns: 1fr; } .landing-in h1 { font-size: 2.4rem; } }
+
+/* ============ Revisions: sign-out, phone, notes, approvals, media ============ */
+.hello-wrap { display: inline-flex; align-items: center; gap: 6px; }
+.hello { cursor: default; }
+.hello-out { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .16); color: #fff; backdrop-filter: blur(8px); cursor: pointer; }
+.hello-out .ic { width: 17px; height: 17px; }
+.phone-row { display: grid; grid-template-columns: 118px 1fr; gap: 8px; }
+.phone-row select { padding-right: 8px; }
+.en-note { display: flex; align-items: center; gap: 8px; background: var(--sage-soft); color: var(--sage); border-radius: 12px; padding: 10px 12px; font-size: .85rem; font-weight: 600; margin: 0; }
+.en-note .ic { width: 16px; height: 16px; }
+.status-sel { appearance: auto; border: 0; border-radius: 999px; padding: 5px 8px; font: 800 .7rem var(--display); letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.inbox-item { cursor: pointer; }
+.inbox-item:focus-visible { outline: 2px solid var(--sage); }
+.id-box { background: var(--beige-soft); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.id-head { display: flex; justify-content: space-between; align-items: center; }
+.id-head .label { margin: 0; }
+.id-box .detail-photo { margin: 0; }
+.vid-prev { width: 160px; flex: none; border-radius: 10px; overflow: hidden; background: var(--navy); }
+.vid-prev .video-link { padding: 10px; font-size: .8rem; }
+.vid-prev .video-link .play { width: 34px; height: 34px; }
+.inline-video { margin-top: 10px; border-radius: 16px; }
+.info-card .step-img { margin-top: 10px; }
+.g-vid { aspect-ratio: 4 / 3; max-width: 100%; background: var(--navy); display: grid; align-items: center; }
+.g-vid .video { height: 100%; object-fit: cover; }
+@media (max-width: 560px) { .vid-prev { width: 100%; } }

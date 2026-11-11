@@ -8,7 +8,7 @@ Open `index.html` through a local web server (for example `python3 -m http.serve
 
 | Page | Access |
 | --- | --- |
-| `guest.html` | Guest guide. Check in with last name **Santos** (or code `HARBOR1`) |
+| `guest.html` | Guest guide. Check in with booking code `PINES1` |
 | `admin.html` | Host dashboard, PIN `1234` |
 
 Open both in the **same browser**, in two tabs. Actions in one tab show up in the other right away.

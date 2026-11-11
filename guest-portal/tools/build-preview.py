@@ -65,7 +65,7 @@ html = f"""<title>Guest Portal Demo</title>
 {PREVIEW_CSS}
 </style>
 <div class="pv-bar">
-  <div><div class="pv-title">Guest Portal · demo preview</div><div class="pv-hint">Guest check-in last name: Santos · Host PIN 1234</div></div>
+  <div><div class="pv-title">Guest Portal · demo preview</div><div class="pv-hint">Guest booking code: PINES1 · Host PIN 1234</div></div>
   <div class="pv-switch" role="tablist" aria-label="Choose view">
     <button type="button" data-v="guest" class="on">Guest view</button>
     <button type="button" data-v="host">Host view<span class="pv-badge" id="pvBadge" hidden></span></button>

@@ -92,7 +92,7 @@
     b.hidden = !n; b.textContent = n > 99 ? '99+' : n;
     const openReq = D().requests.filter(r => r.status === 'new').length;
     const pendingGb = D().guestbook.filter(g => g.status === 'pending').length;
-    setCount('inbox', openReq); setCount('guestbook', pendingGb);
+    setCount('inbox', openReq); setCount('guestbook', pendingGb); setCount('bookings', D().bookings.filter(b => b.idStatus === 'pending').length);
     document.title = (n ? `(${n}) ` : '') + 'Host dashboard';
     if (bellOpen) renderBell();
   }
@@ -117,7 +117,7 @@
   }
 
   function kindIcon(k) {
-    const m = { checkin: 'login', checkout: 'logout', message: 'message', guestbook: 'pen', issue: 'alert', service: 'coffee', housekeeping: 'droplet', luggage: 'briefcase', lost_found: 'search' };
+    const m = { id: 'users', checkin: 'login', checkout: 'logout', message: 'message', guestbook: 'pen', issue: 'alert', service: 'coffee', housekeeping: 'droplet', luggage: 'briefcase', lost_found: 'search' };
     return icon(m[k] || 'bell');
   }
 
@@ -164,6 +164,9 @@
   // ================= shared bits =================
   const statusChip = s => `<span class="status s-${s}">${STATUS_LABEL[s] || s}</span>`;
   const bookingChip = s => `<span class="status b-${s}">${{ upcoming: 'Upcoming', checked_in: 'In-house', checked_out: 'Checked out' }[s]}</span>`;
+  const ID_LABEL = { pending: 'ID pending', approved: 'ID approved', rejected: 'ID rejected' };
+  const idChip = b => (ID_LABEL[b.idStatus] ? `<span class="status ${b.idStatus === 'approved' ? 's-approved' : b.idStatus === 'rejected' ? 's-declined' : 's-new'}">${ID_LABEL[b.idStatus]}</span>` : '');
+  const pendingIds = () => D().bookings.filter(b => b.idStatus === 'pending');
   const propOptions = (selected, withAll) => (withAll ? `<option value="">All properties</option>` : '') + D().properties.map(p => `<option value="${p.id}" ${p.id === selected ? 'selected' : ''}>${esc(p.name.en)}</option>`).join('');
 
   // ================= views =================
@@ -178,9 +181,10 @@
       const avg = rated.length ? (rated.reduce((s, b) => s + b.feedback.rating, 0) / rated.length).toFixed(1) : '—';
       const stat = (n, l, ic) => `<div class="stat">${icon(ic)}<div><b>${n}</b><span>${l}</span></div></div>`;
       const bRow = (b, when) => `<button class="row-btn" data-booking="${b.id}"><span><b>${esc(b.guestName)}</b><small>${esc(propName(b.propertyId))}</small></span><span class="muted small">${when}</span></button>`;
-      return `<div class="a-head"><h1>Good ${greeting()}, ${esc(S().hostName.split(' ')[0])}</h1><p class="muted">${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p></div>
+      return `<div class="a-head"><h1>Good ${greeting()}${/^your\b/i.test(S().hostName) ? '' : ', ' + esc(S().hostName.split(' ')[0])}</h1><p class="muted">${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</p></div>
         <div class="stats">${stat(inHouse.length, 'Guests in-house', 'users')}${stat(arriving.length, 'Arriving (7 days)', 'calendar')}${stat(open.length, 'Open requests', 'inbox')}${stat(avg, 'Average rating', 'star')}</div>
         <div class="grid2">
+          ${pendingIds().length ? `<section class="panel"><h2>ID photos to approve</h2>${pendingIds().map(b => `<button class="row-btn" data-booking="${b.id}"><span><b>${esc(b.guestName)}</b><small>${esc(propName(b.propertyId))} · ${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}</small></span>${idChip(b)}</button>`).join('')}</section>` : ''}
           <section class="panel"><h2>Needs attention</h2>${open.length ? open.slice(0, 8).map(r => `<button class="row-btn" data-req="${r.id}"><span><b>${esc(r.title)}</b><small>${REQUEST_TYPES[r.type]} · ${esc(r.guestName)} · ${esc(propName(r.propertyId))}</small></span>${statusChip(r.status)}</button>`).join('') : '<p class="muted">All caught up.</p>'}</section>
           <section class="panel"><h2>Arrivals & departures</h2>
             ${arriving.map(b => bRow(b, b.checkIn === today ? 'Arriving today' : 'Arrives ' + fmtDate(b.checkIn))).join('')}
@@ -204,11 +208,11 @@
         </div>
         <div class="inbox ${r ? 'has-detail' : ''}">
           <div class="inbox-list">${list.length ? list.map(x => `
-            <button class="inbox-item ${x.id === sel.requestId ? 'on' : ''} ${x.status === 'new' ? 'unread' : ''}" data-req="${x.id}">
+            <div class="inbox-item ${x.id === sel.requestId ? 'on' : ''} ${x.status === 'new' ? 'unread' : ''}" data-req="${x.id}" role="button" tabindex="0">
               <span class="ii-top"><span class="eyebrow">${REQUEST_TYPES[x.type]}</span><small>${timeAgo(x.createdAt)}</small></span>
               <b>${esc(x.title)}</b><small class="muted">${esc(x.guestName)} · ${esc(propName(x.propertyId))}</small>
-              <span class="ii-foot">${statusChip(x.status)}${x.replies.length ? `<small>${icon('message')} ${x.replies.length}</small>` : ''}${x.photo ? `<small>${icon('camera')}</small>` : ''}</span>
-            </button>`).join('') : '<p class="muted pad">No requests here.</p>'}</div>
+              <span class="ii-foot"><select class="status-sel s-${x.status}" data-status-for="${x.id}" aria-label="Status">${STATUSES.map(s => `<option value="${s}" ${s === x.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select>${x.replies.length ? `<small>${icon('message')} ${x.replies.length}</small>` : ''}${x.photo ? `<small>${icon('camera')}</small>` : ''}</span>
+            </div>`).join('') : '<p class="muted pad">No requests here.</p>'}</div>
           <div class="inbox-detail">${r ? requestDetail(r) : '<p class="muted pad">Select a request to view details.</p>'}</div>
         </div>`;
     },
@@ -225,7 +229,7 @@
             <span>${esc(propName(b.propertyId))}</span>
             <span>${fmtDate(b.checkIn)} → ${fmtDate(b.checkOut)}</span>
             <span><code>${esc(b.code)}</code></span>
-            <span>${bookingChip(b.status)}</span>
+            <span>${bookingChip(b.status)} ${b.status === 'checked_in' ? idChip(b) : ''}</span>
             <span class="actions"><button class="icon-btn" data-qr="${b.id}" title="Guest link & QR">${icon('qr')}</button><button class="icon-btn" data-edit="${b.id}" title="Edit">${icon('pen')}</button><button class="icon-btn" data-delb="${b.id}" title="Delete">${icon('trash')}</button></span>
           </div>`).join('') : '<p class="muted pad">No bookings yet.</p>'}</div>`;
     },
@@ -289,6 +293,11 @@
     inbox(main) {
       main.querySelector('#fStatus').onchange = e => { sel.inboxStatus = e.target.value; renderMain(); };
       main.querySelector('#fProp').onchange = e => { sel.inboxProp = e.target.value; renderMain(); };
+      main.querySelectorAll('[data-status-for]').forEach(sl => {
+        sl.onclick = e => e.stopPropagation();
+        sl.onchange = () => { Store.setStatus(sl.dataset.statusFor, sl.value); renderMain(); toast(`Marked as ${STATUS_LABEL[sl.value]} — guest can see it`, 'ok'); };
+      });
+      main.querySelectorAll('.inbox-item').forEach(b => b.onkeydown = e => { if (e.key === 'Enter' && e.target === b) b.click(); });
       main.querySelectorAll('[data-req]').forEach(b => b.onclick = () => {
         sel.requestId = b.dataset.req;
         Store.update(d => d.notifications.forEach(n => { if (n.requestId === sel.requestId) n.read = true; }));
@@ -408,7 +417,7 @@
         const vals = { guestName: f.guestName.value.trim(), propertyId: f.propertyId.value, checkIn: f.checkIn.value, checkOut: f.checkOut.value, guests: +f.guests.value, code, notes: f.notes.value };
         let created;
         Store.update(d => {
-          if (isNew) { created = { id: uid('b'), status: 'upcoming', checkInData: null, feedback: null, createdAt: Date.now(), ...vals }; d.bookings.push(created); }
+          if (isNew) { created = { id: uid('b'), status: 'upcoming', idStatus: 'none', idNote: '', checkInData: null, feedback: null, createdAt: Date.now(), ...vals }; d.bookings.push(created); }
           else Object.assign(d.bookings.find(x => x.id === b.id), vals);
         });
         close(); renderMain();
@@ -462,13 +471,23 @@
       ${b.notes ? `<p class="note">${esc(b.notes)}</p>` : ''}
       <h3>Check-in details</h3>
       ${ci ? `<dl class="dl"><dt>Name</dt><dd>${esc(ci.fullName)}</dd><dt>Phone</dt><dd><a href="tel:${esc(ci.phone)}">${esc(ci.phone)}</a></dd><dt>Email</dt><dd>${esc(ci.email || '—')}</dd><dt>Guests</dt><dd>${ci.guests}</dd><dt>Arrival</dt><dd>${fmtTime12(ci.arrival)}</dd><dt>Notes</dt><dd>${esc(ci.notes || '—')}</dd><dt>Checked in</dt><dd>${new Date(ci.at).toLocaleString()}</dd></dl>
-        ${ci.idPhoto ? `<p class="label">ID photo</p><img class="detail-photo" src="${ci.idPhoto}" alt="Guest ID">` : ''}` : '<p class="muted">Not checked in yet.</p>'}
+        ${ci.idPhoto ? `<div class="id-box"><div class="id-head"><p class="label">ID photo</p>${idChip(b)}</div><img class="detail-photo" src="${ci.idPhoto}" alt="Guest ID" data-zoom>
+          <label>Note to guest if rejecting (optional)<input class="input" id="idNote" placeholder="e.g. The photo is blurry, please retake it in good light." value="${esc(b.idNote || '')}"></label>
+          <div class="btn-row"><button class="btn primary" data-id="approved">${icon('check')} Approve ID</button><button class="btn danger-ghost" data-id="rejected">${icon('x')} Reject</button></div></div>` : ''}` : '<p class="muted">Not checked in yet.</p>'}
       ${fb ? `<h3>Feedback</h3><p class="stars-static">${'★'.repeat(fb.rating || 0)}${'☆'.repeat(5 - (fb.rating || 0))}</p><p>${esc(fb.comment || '')}</p><p class="muted small">Checklist ${fb.checklistDone ? 'completed' : 'not fully completed'}</p>` : ''}
       <h3>Requests (${reqs.length})</h3>${reqs.map(r => `<button class="row-btn" data-req="${r.id}"><span><b>${esc(r.title)}</b><small>${REQUEST_TYPES[r.type]}</small></span>${statusChip(r.status)}</button>`).join('') || '<p class="muted">None.</p>'}
       <h3>Manual status</h3><div class="btn-row">${['upcoming', 'checked_in', 'checked_out'].map(s => `<button class="chip ${b.status === s ? 'on' : ''}" data-bs="${s}">${{ upcoming: 'Upcoming', checked_in: 'In-house', checked_out: 'Checked out' }[s]}</button>`).join('')}</div>
       <div class="btn-row"><button class="btn ghost" id="bdQr">${icon('qr')} Link & QR</button><button class="btn ghost" id="bdEdit">${icon('pen')} Edit</button></div>`, (rootEl, close) => {
       rootEl.querySelectorAll('[data-req]').forEach(x => x.onclick = () => { close(); sel.requestId = x.dataset.req; sel.inboxStatus = 'all'; switchTab('inbox'); });
       rootEl.querySelectorAll('[data-bs]').forEach(x => x.onclick = () => { Store.update(d => { d.bookings.find(y => y.id === b.id).status = x.dataset.bs; }); close(); renderMain(); bookingDetail(Store.booking(b.id)); });
+      rootEl.querySelectorAll('[data-id]').forEach(x => x.onclick = () => {
+        const st = x.dataset.id, note = (rootEl.querySelector('#idNote') || {}).value || '';
+        Store.update(d => { const bk = d.bookings.find(y => y.id === b.id); bk.idStatus = st; bk.idNote = st === 'rejected' ? note : ''; });
+        toast(st === 'approved' ? 'ID approved. Wi-Fi, parking and door code are now visible to the guest.' : 'ID rejected. The guest is asked to upload a new photo.', 'ok');
+        close(); renderMain(); updateBadges();
+      });
+      const zoom = rootEl.querySelector('[data-zoom]');
+      if (zoom) zoom.onclick = () => openModal(`<img src="${zoom.src}" class="zoomed" alt="">`, null, 'wide');
       rootEl.querySelector('#bdQr').onclick = () => { close(); qrModal(b); };
       rootEl.querySelector('#bdEdit').onclick = () => { close(); bookingForm(b); };
     }, 'wide');
@@ -478,6 +497,7 @@
   const BI = (k, label, area) => ({ k, label, t: area ? 'bi-area' : 'bi' });
   const IMG = (k = 'image', label = 'Photo') => ({ k, label, t: 'image' });
   const ICON = { k: 'icon', label: 'Icon', t: 'icon' };
+  const VID = (k = 'video', label = 'Video') => ({ k, label, t: 'video' });
   const safeSum = fn => x => { try { return fn(x); } catch (e) { return ''; } };
   const BUILTIN_TARGETS = [
     ['wifi', 'Wi-Fi (private)'], ['host', 'Host contact (private)'], ['checkin', 'Check in'], ['checkout', 'Checkout'],
@@ -494,25 +514,25 @@
     { k: 'inTutorials', label: 'Show in the Tutorials list', t: 'bool' },
     { k: 'private', label: 'Private: hide until the guest is confirmed and inside the unlock window', t: 'bool' },
     { k: 'showDoorCode', label: 'Show the door code on this page (after online check-in)', t: 'bool' },
-    { k: 'infoCards', label: 'Info cards (hours, closed days, access…)', t: 'list', item: [BI('label', 'Label'), BI('text', 'Text')], blank: () => ({ label: bi(''), text: bi('') }), sum: safeSum(x => x.label.en) },
-    { k: 'gallery', label: 'Photo walk-through (guests swipe)', t: 'list', item: [IMG(), BI('caption', 'Caption')], blank: () => ({ image: '', caption: bi('') }), sum: safeSum(x => x.caption.en) },
-    { k: 'steps', label: 'Numbered steps', t: 'list', item: [BI('title', 'Step title'), BI('text', 'Instructions', 1), IMG()], blank: () => ({ title: bi(''), text: bi(''), image: '' }), sum: safeSum(x => x.title.en) },
-    { k: 'video', label: 'Video link (YouTube, Google Drive, or a direct .mp4 link)', t: 'text' },
+    { k: 'infoCards', label: 'Info cards (hours, closed days, access…)', t: 'list', item: [BI('label', 'Label'), BI('text', 'Text'), IMG(), VID()], blank: () => ({ label: bi(''), text: bi(''), image: '', video: '' }), sum: safeSum(x => x.label.en) },
+    { k: 'gallery', label: 'Photo walk-through (guests swipe)', t: 'list', item: [IMG(), VID('video', 'Video (instead of a photo)'), BI('caption', 'Caption')], blank: () => ({ image: '', video: '', caption: bi('') }), sum: safeSum(x => x.caption.en) },
+    { k: 'steps', label: 'Numbered steps', t: 'list', item: [BI('title', 'Step title'), BI('text', 'Instructions', 1), IMG(), VID()], blank: () => ({ title: bi(''), text: bi(''), image: '', video: '' }), sum: safeSum(x => x.title.en) },
+    VID('video', 'Main video for this page'),
     { k: 'lists', label: 'Lists (e.g. Before swimming, Extra guests)', t: 'list', item: [BI('title', 'List title'), { k: 'tone', label: 'Style', t: 'select', options: [['plain', 'Plain'], ['sage', 'Green highlight']] }, BI('items', 'Items, one per line', 1)], blank: () => ({ title: bi(''), tone: 'plain', items: bi('') }), sum: safeSum(x => x.title.en) },
   ];
   const simpleBi = (label) => ({ item: [BI('', label)], blank: () => bi(''), sum: safeSum(x => x.en) });
 
   const PROP_SECTIONS = [
-    { title: 'Basics', ic: 'building', fields: [BI('name', 'Property name'), BI('welcomeLine', 'Welcome line (script text on the cover)'), BI('tagline', 'Tagline'), { k: 'location', label: 'Location shown on the cover', t: 'text' }, { k: 'address', label: 'Full address', t: 'text' }, IMG('heroImage', 'Home cover photo'), { k: 'checkInTime', label: 'Check-in time', t: 'time' }, { k: 'checkOutTime', label: 'Check-out time', t: 'time' }, { k: 'unlockHours', label: 'Unlock private details this many hours before check-in', t: 'number' }, { k: 'mapUrl', label: 'Google Maps link (directions)', t: 'text' }, { k: 'reviewUrl', label: 'Review link (e.g. your Airbnb listing)', t: 'text' }, { k: 'requireId', label: 'Require an ID photo at online check-in', t: 'bool' }] },
-    { title: 'Private details (door code, Wi-Fi, host)', ic: 'lock', hint: 'Guests see these only after confirming their reservation, inside the unlock window. The door code also needs online check-in.', fields: [{ k: 'doorCode', label: 'Door / lockbox code', t: 'text' }, { k: 'wifi.ssid', label: 'Wi-Fi network name', t: 'text' }, { k: 'wifi.password', label: 'Wi-Fi password', t: 'text' }, BI('wifiNote', 'Wi-Fi note', 1), BI('hostNote', 'Host contact note', 1)] },
+    { title: 'Basics', ic: 'building', fields: [BI('name', 'Property name'), BI('welcomeLine', 'Welcome line (script text on the cover)'), BI('tagline', 'Tagline'), { k: 'location', label: 'Location shown on the cover', t: 'text' }, { k: 'address', label: 'Full address', t: 'text' }, IMG('heroImage', 'Home cover photo'), { k: 'checkInTime', label: 'Check-in time', t: 'time' }, { k: 'checkOutTime', label: 'Check-out time', t: 'time' }, { k: 'unlockHours', label: 'Online check-in opens this many hours before arrival', t: 'number' }, { k: 'hostUnlock', label: 'Show host contact to the guest', t: 'select', options: [['checkin', 'After online check-in'], ['window', 'When online check-in opens (hours above)']] }, { k: 'mapUrl', label: 'Google Maps link (directions)', t: 'text' }, { k: 'reviewUrl', label: 'Review link (e.g. your Airbnb listing)', t: 'text' }, { k: 'requireId', label: 'Require an ID photo at online check-in', t: 'bool' }] },
+    { title: 'Private details (door code, Wi-Fi, host)', ic: 'lock', hint: 'Wi-Fi, parking and the door code are shown only after online check-in (and after you approve the ID, if ID approval is on in Settings).', fields: [{ k: 'doorCode', label: 'Door / lockbox code', t: 'text' }, { k: 'wifi.ssid', label: 'Wi-Fi network name', t: 'text' }, { k: 'wifi.password', label: 'Wi-Fi password', t: 'text' }, BI('wifiNote', 'Wi-Fi note', 1), BI('hostNote', 'Host contact note', 1)] },
     { title: 'Home · tile sections', ic: 'grid', hint: 'The "Start here" card. Each section has a label and a grid of icon tiles.', list: 'homeSections', item: [BI('title', 'Section label'), tileList('tiles', 'Tiles')], blank: () => ({ title: bi(''), tiles: [] }), sum: safeSum(x => x.title.en) },
     { title: 'Home · photo cards', ic: 'image', list: 'features', item: [{ k: 'target', label: 'Opens', t: 'target' }, IMG('image', 'Photo (empty = use the page cover)'), BI('eyebrow', 'Small line on top'), BI('title', 'Title'), BI('text', 'Text', 1), BI('button', 'Button label')], blank: () => ({ target: 'extras', image: '', eyebrow: bi(''), title: bi(''), text: bi(''), button: bi('View details', 'Tingnan') }), sum: safeSum(x => x.title.en) },
     { title: 'Home · swipe panels', ic: 'list', list: 'panels', item: [BI('eyebrow', 'Small label'), BI('title', 'Title'), BI('text', 'Text', 1), tileList('tiles', 'Rows (the first one is dark)')], blank: () => ({ eyebrow: bi(''), title: bi(''), text: bi(''), tiles: [] }), sum: safeSum(x => x.title.en) },
     { title: 'Guide pages & tutorials', ic: 'book', hint: 'Pool, trash, sofa bed, kitchen… Each page can have a cover photo, info cards, a photo walk-through, numbered steps, a video and lists.', list: 'pages', item: PAGE_ITEM, blank: () => ({ id: newPageId(), icon: 'book', category: bi(''), title: bi('New page', 'Bagong page'), summary: bi(''), cover: '', inTutorials: true, private: false, showDoorCode: false, video: '', infoCards: [], gallery: [], steps: [], lists: [] }), sum: safeSum(x => `${x.title.en}${x.inTutorials ? ' · Tutorial' : ''}${x.private ? ' · Private' : ''}`) },
     { title: 'Extras & experiences', ic: 'sparkle', fields: [IMG('extrasCover', 'Extras page cover photo')], list: 'services', item: [ICON, BI('name', 'Name'), BI('category', 'Category (used for filters)'), BI('tag', 'Tag (e.g. Host-arranged, Partner service)'), BI('desc', 'Description', 1), BI('priceText', 'Price text (e.g. Ask for rate, ₱600 per trip)'), { k: 'price', label: 'Price for estimates (0 = no estimate)', t: 'number' }, BI('note', 'Note (e.g. Request 1 day ahead)'), IMG()], blank: () => ({ icon: 'sparkle', name: bi(''), category: bi(''), tag: bi(''), desc: bi(''), priceText: bi(''), price: 0, note: bi(''), image: '' }), sum: safeSum(x => `${x.name.en} · ${x.priceText.en || money(x.price)}`) },
-    { title: 'Safety & emergency contacts', ic: 'siren', fields: [BI('notice.title', 'Notice title (e.g. Generator information)'), BI('notice.text', 'Notice text', 1)], list: 'emergency', item: [ICON, BI('label', 'Name'), BI('desc', 'Description'), { k: 'phones', label: 'Phone numbers, separated by commas', t: 'text' }, { k: 'mapUrl', label: 'Map link (optional)', t: 'text' }], blank: () => ({ icon: 'siren', label: bi(''), desc: bi(''), phones: '', mapUrl: '' }), sum: safeSum(x => x.label.en) },
-    { title: 'Emergency procedures', ic: 'flame', list: 'procedures', item: [BI('title', 'Title'), BI('text', 'What to do', 1)], blank: () => ({ title: bi(''), text: bi('') }), sum: safeSum(x => x.title.en) },
-    { title: 'Common problems', ic: 'help', list: 'problems', item: [BI('q', 'Problem'), BI('a', 'Quick fix', 1)], blank: () => ({ q: bi(''), a: bi('') }), sum: safeSum(x => x.q.en) },
+    { title: 'Safety & emergency contacts', ic: 'siren', hint: 'The sample numbers come from public listings. Please verify each one before going live.', fields: [BI('notice.title', 'Notice title (e.g. Generator information)'), BI('notice.text', 'Notice text', 1)], list: 'emergency', item: [ICON, BI('label', 'Name'), BI('desc', 'Description'), { k: 'phones', label: 'Phone numbers, separated by commas', t: 'text' }, { k: 'mapUrl', label: 'Map link (optional)', t: 'text' }], blank: () => ({ icon: 'siren', label: bi(''), desc: bi(''), phones: '', mapUrl: '' }), sum: safeSum(x => x.label.en) },
+    { title: 'Emergency procedures', ic: 'flame', list: 'procedures', item: [BI('title', 'Title'), BI('text', 'What to do', 1), IMG(), VID()], blank: () => ({ title: bi(''), text: bi(''), image: '', video: '' }), sum: safeSum(x => x.title.en) },
+    { title: 'Common problems', ic: 'help', list: 'problems', item: [BI('q', 'Problem'), BI('a', 'Quick fix', 1), IMG(), VID()], blank: () => ({ q: bi(''), a: bi(''), image: '', video: '' }), sum: safeSum(x => x.q.en) },
     { title: 'House rules', ic: 'lock', list: 'rules', ...simpleBi('Rule') },
     { title: 'Local guide', ic: 'pin', list: 'localGuide', item: [BI('category', 'Category (e.g. Food)'), { k: 'name', label: 'Place name', t: 'text' }, BI('desc', 'Description', 1), { k: 'mapUrl', label: 'Google Maps link', t: 'text', mapFrom: 'name' }, IMG()], blank: () => ({ category: bi(''), name: '', desc: bi(''), mapUrl: '', image: '' }), sum: safeSum(x => x.name) },
     { title: 'Request items (quick picks)', ic: 'message', list: 'requestItems', ...simpleBi('Item') },
@@ -525,11 +545,13 @@
   const SETTINGS_SECTIONS = [
     { title: 'Brand', ic: 'building', fields: [{ k: 'brandName', label: 'Brand name', t: 'text' }, BI('tagline', 'Tagline'), { k: 'accent', label: 'Button color', t: 'color' }] },
     { title: 'Host contact', ic: 'phone', fields: [{ k: 'hostName', label: 'Host name (shown to guests)', t: 'text' }, { k: 'hostPhone', label: 'Phone', t: 'text' }, { k: 'hostEmail', label: 'Email', t: 'text' }] },
+    { title: 'Check-in & ID approval', ic: 'users', fields: [{ k: 'requireIdApproval', label: 'Approve ID photos before Wi-Fi, parking and the door code unlock', t: 'bool' }] },
+    { title: 'Languages', ic: 'globe', hint: 'English is always on. Menus are translated; your content shows in English unless you fill in the other language.', fields: [{ k: 'languages.ko', label: '🇰🇷 Korean', t: 'bool' }, { k: 'languages.ja', label: '🇯🇵 Japanese', t: 'bool' }, { k: 'languages.zh', label: '🇨🇳 Chinese (Simplified)', t: 'bool' }, { k: 'languages.fil', label: '🇵🇭 Filipino', t: 'bool' }, { k: 'askEnglish', label: 'Ask guests to write their messages in English', t: 'bool' }] },
     { title: 'Currency & admin PIN', ic: 'key', fields: [{ k: 'currency', label: 'Currency symbol', t: 'text' }, { k: 'adminPin', label: 'Admin PIN', t: 'text' }] },
     { title: 'Quick replies', ic: 'message', list: 'quickReplies', item: [{ k: '', label: 'Reply text', t: 'text' }], blank: () => '', sum: x => x },
   ];
 
-  const openKeys = new Set(['sec:Basics', 'sec:Brand']);
+  const openKeys = new Set(['sec:Basics', 'sec:Brand', 'sec:Check-in & ID approval', 'sec:Languages']);
   let BLANKS = [];
   const join = (a, b) => (b === '' ? a : `${a}.${b}`);
   function getPath(o, path) { return path.split('.').reduce((x, k) => (x == null ? x : x[k]), o); }
@@ -554,7 +576,8 @@
       case 'list': return `<div class="field">${lab}${listHTML(path, f)}</div>`;
       case 'bi': case 'bi-area': {
         const ctl = sub => f.t === 'bi' ? `<input class="input" data-path="${path}.${sub}" value="${esc(v && v[sub])}">` : `<textarea class="input" rows="3" data-path="${path}.${sub}">${esc(v && v[sub])}</textarea>`;
-        return `<div class="field">${lab}<div class="bi"><label><small>EN</small>${ctl('en')}</label><label><small>FIL</small>${ctl('fil')}</label></div></div>`;
+        const codes = ['en', ...['ko', 'ja', 'zh', 'fil'].filter(c => (S().languages || {})[c])];
+        return `<div class="field">${lab}<div class="bi">${codes.map(c => `<label><small>${c.toUpperCase()}${c === 'en' ? '' : ' (optional)'}</small>${ctl(c)}</label>`).join('')}</div></div>`;
       }
       case 'bool': return `<label class="check field"><input type="checkbox" data-path="${path}" data-kind="bool" ${v ? 'checked' : ''}> <span>${esc(f.label)}</span></label>`;
       case 'number': return `<label class="field">${lab}<input class="input" type="number" min="0" data-path="${path}" data-kind="number" value="${esc(v)}"></label>`;
@@ -563,10 +586,17 @@
       case 'select': return `<label class="field">${lab}<select class="input" data-path="${path}" data-rerender="1">${f.options.map(o => { const [ov, ol] = Array.isArray(o) ? o : [o, o[0].toUpperCase() + o.slice(1)]; return `<option value="${esc(ov)}" ${ov === v ? 'selected' : ''}>${esc(ol)}</option>`; }).join('')}</select></label>`;
       case 'target': return `<label class="field">${lab}<select class="input" data-path="${path}" data-rerender="1">${targetOptions(v)}</select></label>`;
       case 'icon': return `<div class="field">${lab}<div class="icon-pick"><span class="sq-ic beige">${icon(v || 'grid')}</span><select class="input" data-path="${path}" data-rerender="1">${Object.keys(ICONS).map(n => `<option ${n === v ? 'selected' : ''}>${n}</option>`).join('')}</select></div></div>`;
+      case 'video': return `<div class="field">${lab}<div class="img-ed">
+          ${v ? `<div class="vid-prev">${videoHTML(v)}</div>` : `<div class="img-ph">${icon('play')}</div>`}
+          <div class="stack sm"><label class="btn ghost sm">${icon('up')} Upload video<input type="file" accept="video/mp4,video/webm,video/quicktime" data-vid="${path}" hidden></label>
+          <input class="input" placeholder="…or paste a YouTube / Google Drive link" data-path="${path}" value="${v && !String(v).startsWith('data:') ? esc(v) : ''}">
+          <small class="muted">MP4 up to ${LIMITS.videoMBDemo} MB in this demo (${LIMITS.videoMBLive} MB when live). Longer videos: use a YouTube or Google Drive link.</small>
+          ${v ? `<button class="link danger" data-clear="${path}">Remove video</button>` : ''}</div></div></div>`;
       case 'image': return `<div class="field">${lab}<div class="img-ed">
           ${v ? `<img src="${esc(v)}" alt="">` : `<div class="img-ph">${icon('camera')}</div>`}
           <div class="stack sm"><label class="btn ghost sm">${icon('up')} Upload<input type="file" accept="image/*" data-img="${path}" hidden></label>
           <input class="input" placeholder="…or paste an image link" data-path="${path}" value="${v && !String(v).startsWith('data:') ? esc(v) : ''}">
+          <small class="muted">JPG or PNG up to ${LIMITS.photoMB} MB (resized automatically).</small>
           ${v ? `<button class="link danger" data-clear="${path}">Remove photo</button>` : ''}</div></div></div>`;
       default: return `<label class="field">${lab}<div class="inline"><input class="input" data-path="${path}" value="${esc(v)}">${f.mapFrom ? `<button class="btn ghost sm" data-mapfrom="${join(base, f.mapFrom)}|${path}" title="Create a Google Maps search link from the place name">${icon('pin')} Auto</button>` : ''}</div></label>`;
     }
@@ -604,7 +634,15 @@
     ed.addEventListener('toggle', e => { const k = e.target.dataset && e.target.dataset.key; if (k) e.target.open ? openKeys.add(k) : openKeys.delete(k); }, true);
     ed.addEventListener('change', async e => {
       const el = e.target;
+      if (el.dataset.vid) {
+        const file = el.files[0]; if (!file) return;
+        if (file.size > LIMITS.videoMBDemo * 1048576) { el.value = ''; return toast(`That video is ${(file.size / 1048576).toFixed(1)} MB. The demo limit is ${LIMITS.videoMBDemo} MB (${LIMITS.videoMBLive} MB when live). Use a YouTube or Google Drive link for longer videos.`, 'err'); }
+        const url = await fileToDataURL(file);
+        if (Store.update(d => setPath(d, el.dataset.vid, url))) { saved(); rerender(); }
+        return;
+      }
       if (el.dataset.img) {
+        if (el.files[0] && el.files[0].size > LIMITS.photoMB * 1048576) { el.value = ''; return toast(`That photo is over ${LIMITS.photoMB} MB. Please choose a smaller one.`, 'err'); }
         const url = await compressImage(el.files[0]);
         if (Store.update(d => setPath(d, el.dataset.img, url))) { saved(); rerender(); }
         return;
@@ -616,6 +654,7 @@
       if (Store.update(d => setPath(d, el.dataset.path, val))) {
         saved();
         if (el.dataset.path.startsWith('settings.')) applyTheme(S());
+        if (el.dataset.path.startsWith('settings.languages')) rerender();
         if (el.dataset.rerender) rerender();
       }
     });

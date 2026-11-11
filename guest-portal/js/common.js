@@ -201,6 +201,38 @@ function videoHTML(url, label = 'Watch video') {
   return `<a class="video-link" href="${esc(url)}" target="_blank" rel="noopener"><span class="play">${icon('play')}</span><span>${esc(label)}</span>${icon('external')}</a>`;
 }
 
+/* Photo and/or video attached to an instruction (step, info card, answer...). */
+function mediaHTML(image, video, cls = 'step-img') {
+  return (image ? `<img src="${esc(image)}" alt="" class="${cls}">` : '') + (video ? `<div class="video-wrap inline-video">${videoHTML(video)}</div>` : '');
+}
+
+/* Mobile number rules by country code. digits = what follows the country code. */
+const PHONE_RULES = [
+  { cc: '63', label: '🇵🇭 +63', re: /^9\d{9}$/, hint: '9 + 9 digits, e.g. 917 123 4567' },
+  { cc: '82', label: '🇰🇷 +82', re: /^10\d{8}$/, hint: '10 + 8 digits, e.g. 10 1234 5678' },
+  { cc: '81', label: '🇯🇵 +81', re: /^[789]0\d{8}$/, hint: '70/80/90 + 8 digits, e.g. 90 1234 5678' },
+  { cc: '86', label: '🇨🇳 +86', re: /^1\d{10}$/, hint: '1 + 10 digits, e.g. 138 0013 8000' },
+  { cc: '1', label: '🇺🇸 +1', re: /^\d{10}$/, hint: '10 digits, e.g. 415 555 0132' },
+  { cc: 'other', label: '🌐 Other', re: /^\d{8,15}$/, hint: 'Full number with country code, e.g. 44 7700 900123' },
+];
+/* Returns { ok, value } with value formatted as +CC DIGITS. Accepts local formats like 0917... */
+function checkPhone(cc, raw) {
+  const rule = PHONE_RULES.find(r => r.cc === cc) || PHONE_RULES[PHONE_RULES.length - 1];
+  let d = String(raw || '').replace(/\D/g, '');
+  if (rule.cc !== 'other') {
+    if (d.startsWith(rule.cc) && d.length > rule.cc.length + 7) d = d.slice(rule.cc.length);
+    if (d.startsWith('0')) d = d.slice(1);
+  }
+  return { ok: rule.re.test(d), value: rule.cc === 'other' ? '+' + d : `+${rule.cc} ${d}`, rule };
+}
+
+/* File size limits for uploads (MB). Videos are tiny in the demo because browser storage is small. */
+const LIMITS = { photoMB: 10, videoMBDemo: 2, videoMBLive: 50 };
+
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); });
+}
+
 const TILE_COLORS = ['green', 'sage', 'beige', 'yellow', 'lavender', 'mint', 'red', 'navy'];
 
 function mapsSearch(q) { return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(q); }

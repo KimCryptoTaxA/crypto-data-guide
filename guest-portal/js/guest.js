@@ -6,7 +6,8 @@
   const app = document.getElementById('app');
   const CODE_KEY = 'guestportal_code';
   const PROP_KEY = 'guestportal_prop';
-  const LANGS = [['en', '🇺🇸', 'English'], ['fil', '🇵🇭', 'Filipino']];
+  const ALL_LANGS = [['en', '🇺🇸', 'English'], ['ko', '🇰🇷', '한국어'], ['ja', '🇯🇵', '日本語'], ['zh', '🇨🇳', '中文'], ['fil', '🇵🇭', 'Filipino']];
+  const langs = () => ALL_LANGS.filter(([k]) => k === 'en' || (Store.get().settings.languages || {})[k]);
   let lang = safeGet('guestportal_lang') || 'en';
   let code = safeGet(CODE_KEY) || '';
   let propId = '';
@@ -46,28 +47,34 @@
   }
   function access() {
     const b = booking(), p = property();
-    if (!b || b.propertyId !== p.id) return { verified: false, unlocked: false, checkedIn: false, b: null, p };
-    const inWindow = Date.now() >= unlockAt(b, p).getTime() && ymd() <= b.checkOut && b.status !== 'checked_out';
-    return { verified: true, unlocked: inWindow, checkedIn: b.status === 'checked_in', b, p };
+    if (!b || b.propertyId !== p.id) return { verified: false, unlocked: false, checkedIn: false, cleared: false, hostOpen: false, idStatus: 'none', b: null, p };
+    const active = ymd() <= b.checkOut && b.status !== 'checked_out';
+    const inWindow = active && Date.now() >= unlockAt(b, p).getTime();
+    const checkedIn = b.status === 'checked_in';
+    const needsApproval = S().requireIdApproval && p.requireId;
+    const idStatus = b.idStatus || 'none';
+    const cleared = checkedIn && active && (!needsApproval || idStatus === 'approved');
+    const hostOpen = p.hostUnlock === 'window' ? inWindow || (checkedIn && active) : checkedIn && active;
+    return { verified: true, unlocked: inWindow, checkedIn, cleared, hostOpen, idStatus, b, p };
   }
   const page = id => (property().pages || []).find(x => x.id === id);
 
   function isLocked(target) {
     const a = access();
-    if (['wifi', 'host'].includes(target)) return !a.unlocked;
+    if (target === 'wifi') return !a.cleared;
+    if (target === 'host') return !a.hostOpen;
     if (target === 'checkout') return !a.checkedIn;
     if (target.startsWith('p-')) {
       const pg = page(target.slice(2));
-      if (!pg) return false;
-      if (pg.private) return !a.unlocked;
-      if (pg.showDoorCode) return !(a.unlocked && a.checkedIn);
+      if (pg && (pg.private || pg.showDoorCode)) return !a.cleared;
     }
     return false;
   }
 
   // ---------- building blocks ----------
   function langSelect(cls = '') {
-    return `<label class="lang-sel ${cls}"><span class="sr">Language</span><select id="langSel">${LANGS.map(([k, f, n]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${f} ${n}</option>`).join('')}</select>${icon('down', 'sel-chev')}</label>`;
+    if (langs().length < 2) return '<span></span>';
+    return `<label class="lang-sel ${cls}"><span class="sr">Language</span><select id="langSel">${langs().map(([k, f, n]) => `<option value="${k}" ${k === lang ? 'selected' : ''}>${f} ${n}</option>`).join('')}</select>${icon('down', 'sel-chev')}</label>`;
   }
 
   function topBar() {
@@ -96,15 +103,24 @@
   }
 
   /* Explains why something is hidden and what unlocks it. */
-  function lockCard(need = 'window') {
-    const a = access(), p = property();
+  function lockCard() {
+    const a = access(), p = property(), b = a.b;
     let title = t('lock_title'), text, cta = `<a class="btn primary block" href="#checkin">${t('cta_checkin')}</a>`;
-    if (!a.verified) text = tf('lock_text', { h: p.unlockHours });
-    else if (!a.unlocked && a.b.status !== 'checked_out') text = tf('lock_wait', { when: whenText(unlockAt(a.b, p)) });
-    else if (need === 'checkin' && !a.checkedIn) { title = t('lock_ci_title'); text = t('lock_ci_text'); cta = `<a class="btn primary block" href="#checkin">${t('cta_online_ci')}</a>`; }
-    else { title = t('lock_ended_title'); text = t('lock_ended_text'); cta = ''; }
+    if (!a.verified) text = t('lock_text');
+    else if (b.status === 'checked_out' || ymd() > b.checkOut) { title = t('lock_ended_title'); text = t('lock_ended_text'); cta = ''; }
+    else if (b.status === 'upcoming' && !a.unlocked) text = tf('lock_wait', { when: whenText(unlockAt(b, p)) });
+    else if (b.status === 'upcoming') { title = t('lock_ci_title'); text = t('lock_ci_text'); cta = `<a class="btn primary block" href="#checkin">${t('cta_online_ci')}</a>`; }
+    else if (a.idStatus === 'rejected') { title = t('lock_rejected_title'); text = t('lock_rejected_text') + (b.idNote ? ` “${b.idNote}”` : ''); cta = `<a class="btn primary block" href="#checkin">${t('reupload_cta')}</a>`; }
+    else { title = t('lock_pending_title'); text = t('lock_pending_text'); cta = ''; }
     return `<div class="lock-card"><div class="lock-top"><span class="lock-ic">${icon('lock')}</span><div><h2>${esc(title)}</h2><p>${esc(text)}</p></div></div>
       <div class="lock-actions stack">${cta}<a class="btn beige block" href="#extras">${icon('sparkle')} ${t('t_extras')}</a><a class="btn outline block" href="#home">${t('browse_guide')}</a></div></div>`;
+  }
+
+  const hostLockedText = p => (p.hostUnlock === 'window' ? tf('host_unlocks', { h: p.unlockHours }) : t('host_unlocks_ci'));
+
+  /* Shown on forms when the guest reads the app in another language. */
+  function englishNote() {
+    return lang !== 'en' && S().askEnglish ? `<p class="en-note">${icon('globe')} ${t('reply_english')}</p>` : '';
   }
 
   function stayLine(b) {
@@ -140,12 +156,14 @@
     if (!a.verified) cta = `<a class="btn primary block lg" href="#checkin">${t('cta_checkin')}</a>`;
     else if (b.status === 'upcoming' && !a.unlocked) cta = `<a class="btn primary block lg muted-btn" href="#checkin">${tf('cta_opens', { when: fmtDate(ymd(unlockAt(b, p)), lang) })}</a>`;
     else if (b.status === 'upcoming') cta = `<a class="btn primary block lg" href="#checkin">${t('cta_online_ci')}</a>`;
+    else if (b.status === 'checked_in' && a.idStatus === 'pending' && !a.cleared) cta = `<a class="btn outline block lg muted-btn" href="#checkin">${t('id_pending_cta')}</a>`;
+    else if (b.status === 'checked_in' && a.idStatus === 'rejected' && !a.cleared) cta = `<a class="btn primary block lg" href="#checkin">${t('reupload_cta')}</a>`;
     else if (b.status === 'checked_in') cta = `<a class="btn outline block lg" href="#checkout">${t('cta_checkout')}</a>`;
     else cta = `<a class="btn outline block lg" href="#checkout">${t('leave_review')}</a>`;
-    const hostOpen = a.unlocked;
+    const hostOpen = a.hostOpen;
     return `
       <section class="g-hero ${p.heroImage ? '' : 'no-img'}" ${p.heroImage ? `style="background-image:url('${esc(p.heroImage)}')"` : ''}>
-        <div class="hero-top">${b ? `<button class="hello" id="switchStay" title="${t('switch_stay')}">${icon('users')} ${esc(b.guestName.split(' ')[0])}</button>` : '<span></span>'}${langSelect('on-dark')}</div>
+        <div class="hero-top">${b ? `<div class="hello-wrap"><span class="hello">${icon('users')} ${esc(b.guestName.split(' ')[0])}</span><button class="hello-out" id="switchStay" aria-label="${t('sign_out')}" title="${t('sign_out')}">${icon('logout')}</button></div>` : '<span></span>'}${langSelect('on-dark')}</div>
         <div class="hero-in">
           <p class="script">${esc(tr(p.welcomeLine))}</p>
           <h1>${esc(tr(p.name))}</h1>
@@ -177,7 +195,7 @@
           <div class="feature-body"><span class="eyebrow">${esc(tr(f.eyebrow))}</span><h3>${esc(tr(f.title))}</h3><p class="muted clamp2">${esc(tr(f.text))}</p><span class="btn primary sm">${esc(tr(f.button))} ${icon('chevron')}</span></div></a>`;
       }).join('')}
 
-      <div class="need-card"><div><b>${t('need_anything')}</b><p>${hostOpen ? esc(tr(p.hostNote)) : tf('host_unlocks', { h: p.unlockHours })}</p></div>
+      <div class="need-card"><div><b>${t('need_anything')}</b><p>${hostOpen ? esc(tr(p.hostNote)) : esc(hostLockedText(p))}</p></div>
         ${hostOpen ? `<a class="btn white" href="#host">${t('contact')}</a>` : `<a class="btn white" href="#checkin">${t('cta_checkin')}</a>`}</div>
 
       <a class="safety-card" href="#emergency"><span class="sq-ic red">${icon('siren')}</span><div><h3>${t('safety_title')}</h3><p>${t('safety_text')}</p></div>${icon('chevron', 'chev-r')}</a>
@@ -198,16 +216,16 @@
   function guidePage(pg) {
     const a = access(), p = property();
     let body = '';
-    if (pg.private && !a.unlocked) body = lockCard();
+    if (pg.private && !a.cleared) body = lockCard();
     else {
       if (pg.showDoorCode) {
-        body += a.unlocked && a.checkedIn
+        body += a.cleared
           ? `<div class="door-code"><span class="eyebrow light">${t('door_code')}</span><p class="code">${esc(p.doorCode)}</p><small>${t('door_backup')}</small></div>`
-          : lockCard('checkin');
+          : lockCard();
       }
-      if ((pg.infoCards || []).length) body += `<div class="card stack sm">${pg.infoCards.map(c => `<div class="info-card"><span class="eyebrow">${esc(tr(c.label))}</span><p>${esc(tr(c.text))}</p></div>`).join('')}</div>`;
-      if ((pg.gallery || []).length) body += `<div class="gallery">${pg.gallery.map(g => `<figure><div class="g-img ${g.image ? '' : 'no-img'}" ${g.image ? `style="background-image:url('${esc(g.image)}')"` : ''}>${g.image ? '' : icon('image')}</div><figcaption>${esc(tr(g.caption))}</figcaption></figure>`).join('')}</div>`;
-      if ((pg.steps || []).length) body += `<div class="card"><h2>${t('steps')}</h2><ol class="num-steps">${pg.steps.map((s, i) => `<li><span class="n">${i + 1}</span><div><h3>${esc(tr(s.title))}</h3>${paras(tr(s.text))}${s.image ? `<img src="${esc(s.image)}" alt="" class="step-img">` : ''}</div></li>`).join('')}</ol></div>`;
+      if ((pg.infoCards || []).length) body += `<div class="card stack sm">${pg.infoCards.map(c => `<div class="info-card"><span class="eyebrow">${esc(tr(c.label))}</span><p>${esc(tr(c.text))}</p>${mediaHTML(c.image, c.video)}</div>`).join('')}</div>`;
+      if ((pg.gallery || []).length) body += `<div class="gallery">${pg.gallery.map(g => `<figure>${!g.image && g.video ? `<div class="g-vid">${videoHTML(g.video, t('watch_video'))}</div>` : `<div class="g-img ${g.image ? '' : 'no-img'}" ${g.image ? `style="background-image:url('${esc(g.image)}')"` : ''}>${g.image ? '' : icon('image')}</div>`}<figcaption>${esc(tr(g.caption))}</figcaption></figure>`).join('')}</div>`;
+      if ((pg.steps || []).length) body += `<div class="card"><h2>${t('steps')}</h2><ol class="num-steps">${pg.steps.map((s, i) => `<li><span class="n">${i + 1}</span><div><h3>${esc(tr(s.title))}</h3>${paras(tr(s.text))}${mediaHTML(s.image, s.video)}</div></li>`).join('')}</ol></div>`;
       if (pg.video) body += `<div class="video-wrap">${videoHTML(pg.video, t('watch_video'))}</div>`;
       (pg.lists || []).forEach(l => {
         const items = tr(l.items).split('\n').map(x => x.trim()).filter(Boolean);
@@ -219,14 +237,14 @@
 
   V.wifi = () => {
     const p = property(), a = access();
-    if (!a.unlocked) return topBar() + pageHead('wifi', t('quick_access'), t('t_wifi'), '') + lockCard();
+    if (!a.cleared) return topBar() + pageHead('wifi', t('quick_access'), t('t_wifi'), '') + lockCard();
     const row = (label, val) => `<div class="kv"><span class="muted">${label}</span><b>${esc(val)}</b><button class="icon-btn" data-copy="${esc(val)}" aria-label="${t('copy')}">${icon('copy')}</button></div>`;
     return topBar() + pageHead('wifi', t('quick_access'), t('t_wifi'), tr(p.wifiNote)) + `<div class="card wifi-card">${row(t('network'), p.wifi.ssid)}${row(t('password'), p.wifi.password)}<div id="wifiQr" class="wifi-qr"></div><p class="muted small center">${t('wifi_qr')}</p></div>`;
   };
 
   V.host = () => {
     const p = property(), a = access();
-    if (!a.unlocked) return topBar() + pageHead('phone', t('concierge'), t('host_contact'), '') + lockCard();
+    if (!a.hostOpen) return topBar() + pageHead('phone', t('concierge'), t('host_contact'), hostLockedText(p)) + lockCard();
     const phone = S().hostPhone;
     return topBar() + pageHead('phone', t('concierge'), t('host_contact'), tr(p.hostNote)) + `
       <div class="card host-card"><span class="avatar">${esc(S().hostName.slice(0, 1))}</span><h2>${esc(S().hostName)}</h2>
@@ -238,21 +256,21 @@
   const phoneChip = n => `<a class="chip mono" href="tel:${esc(n.replace(/[^\d+]/g, ''))}">${esc(n)}</a>`;
   V.emergency = () => {
     const p = property(), a = access();
-    const hostCard = a.unlocked
+    const hostCard = a.hostOpen
       ? `<div class="em-card"><span class="sq-ic navy">${icon('phone')}</span><div><h3>${esc(S().hostName)}</h3><p class="muted">${t('host_contact')}</p><div class="chips wrap">${phoneChip(S().hostPhone)}</div></div></div>`
-      : `<div class="em-card"><span class="sq-ic beige">${icon('lock')}</span><div><h3>${tf('host_unlocks', { h: p.unlockHours })}</h3></div><a class="btn soft sm" href="#checkin">${t('cta_checkin')}</a></div>`;
+      : `<div class="em-card"><span class="sq-ic beige">${icon('lock')}</span><div><h3>${esc(hostLockedText(p))}</h3></div><a class="btn soft sm" href="#checkin">${t('cta_checkin')}</a></div>`;
     return topBar() + pageHead('siren', t('priority_help'), t('safety_title'), t('safety_text')) + `<div class="stack">${hostCard}
       ${(p.emergency || []).map(e => `<div class="em-card"><span class="sq-ic red">${icon(e.icon || 'siren')}</span><div><h3>${esc(tr(e.label))}</h3><p class="muted">${esc(tr(e.desc))}</p>
         <div class="chips wrap">${String(e.phones || '').split(',').map(x => x.trim()).filter(Boolean).map(phoneChip).join('')}${e.mapUrl ? `<a class="chip" target="_blank" rel="noopener" href="${esc(e.mapUrl)}">${icon('pin')} ${t('open_map')}</a>` : ''}</div></div></div>`).join('')}
       ${p.notice && tr(p.notice.text) ? `<div class="card tone-sage"><h2>${esc(tr(p.notice.title))}</h2><p class="muted">${esc(tr(p.notice.text))}</p></div>` : ''}
-      ${(p.procedures || []).length ? `<h2 class="sub-h">${t('procedures')}</h2>${p.procedures.map(x => `<details class="acc"><summary><span>${esc(tr(x.title))}</span>${icon('chevron', 'chev')}</summary><div class="acc-body">${paras(tr(x.text))}</div></details>`).join('')}` : ''}
+      ${(p.procedures || []).length ? `<h2 class="sub-h">${t('procedures')}</h2>${p.procedures.map(x => `<details class="acc"><summary><span>${esc(tr(x.title))}</span>${icon('chevron', 'chev')}</summary><div class="acc-body">${paras(tr(x.text))}${mediaHTML(x.image, x.video)}</div></details>`).join('')}` : ''}
       <p class="muted small center">${t('sos_note')}</p></div>`;
   };
 
   V.problems = () => {
     const p = property();
     return topBar() + pageHead('help', t('troubleshooting'), t('t_problems'), t('problems_sub')) + `<div class="stack">
-      ${(p.problems || []).map(x => `<details class="acc"><summary><span>${esc(tr(x.q))}</span>${icon('chevron', 'chev')}</summary><div class="acc-body">${paras(tr(x.a))}</div></details>`).join('')}
+      ${(p.problems || []).map(x => `<details class="acc"><summary><span>${esc(tr(x.q))}</span>${icon('chevron', 'chev')}</summary><div class="acc-body">${paras(tr(x.a))}${mediaHTML(x.image, x.video)}</div></details>`).join('')}
       <a class="btn primary block" href="#help">${icon('alert')} ${t('still_stuck')}</a></div>`;
   };
 
@@ -291,23 +309,29 @@
     const p = property(), a = access();
     let head = topBar() + pageHead('login', t('arrival'), t('t_checkin'), '');
     if (!a.verified) {
-      return head + `<form id="verifyForm" class="card stack"><p class="muted">${tf('verify_sub', { h: p.unlockHours })}</p>
-        <label>${t('f_lastname')}<input class="input" id="verifyInput" name="who" autocomplete="family-name" placeholder="${t('f_lastname_ph')}" required></label>
+      return head + `<form id="verifyForm" class="card stack"><p class="muted">${t('verify_sub')}</p>
+        <label>${t('f_code')}<input class="input code-input" id="verifyInput" name="who" autocomplete="off" autocapitalize="characters" placeholder="${t('f_code_ph')}" required></label>
         <button class="btn primary block lg">${t('confirm_stay')}</button><p class="hint">${t('verify_hint')}</p></form>`;
     }
     const b = a.b;
     head += `<button class="link switch-link" id="switchStay">${t('switch_stay')}</button>`;
+    if (b.status === 'checked_in' && a.idStatus === 'pending' && !a.cleared) return head + `<div class="card center">${icon('clock', 'big')}<h2>${t('lock_pending_title')}</h2><p class="muted">${t('lock_pending_text')}</p><a class="btn outline" href="#home">${t('browse_guide')}</a></div>`;
+    if (b.status === 'checked_in' && a.idStatus === 'rejected' && !a.cleared) return head + `<form id="reForm" class="card stack"><h2>${t('lock_rejected_title')}</h2><p class="muted">${t('lock_rejected_text')}</p>${b.idNote ? `<p class="note">${esc(b.idNote)}</p>` : ''}
+        <label>${t('f_id')}<div class="upload">${icon('camera')}<span>${t('f_id_hint')}</span><input type="file" name="idPhoto" accept="image/*" required></div></label>
+        <button class="btn primary block lg">${t('reupload_btn')}</button></form>`;
     if (b.status === 'checked_in') return head + `<div class="card center">${icon('check', 'big ok')}<h2>${t('ci_done')}</h2><p class="muted">${t('ci_done_sub')}</p><a class="btn primary" href="#p-door">${icon('key')} ${t('see_door')}</a></div>`;
     if (b.status === 'checked_out') return head + `<div class="card center"><h2>${t('st_out')}</h2><a class="btn primary" href="#checkout">${t('leave_review')}</a></div>`;
     if (!a.unlocked) return head + `<div class="card center">${icon('calendar', 'big')}<h2>${tf('confirmed_hi', { name: b.guestName.split(' ')[0] })}</h2><p class="muted">${tf('lock_wait', { when: whenText(unlockAt(b, p)) })}</p><a class="btn outline" href="#home">${t('browse_guide')}</a></div>`;
     return head + `
       <form id="ciForm" class="card stack"><p class="muted">${t('ci_sub')}</p>
         <label>${t('f_fullname')}<input class="input" name="fullName" value="${esc(b.guestName)}" required></label>
-        <div class="row2"><label>${t('f_phone')}<input class="input" name="phone" type="tel" required></label><label>${t('f_guests')}<input class="input" name="guests" type="number" min="1" value="${b.guests}" required></label></div>
+        <div class="field"><span class="f-label">${t('f_phone')}</span><div class="phone-row"><select class="input" name="cc" id="ccSel">${PHONE_RULES.map(r => `<option value="${r.cc}">${r.label}</option>`).join('')}</select><input class="input" name="phone" type="tel" inputmode="tel" placeholder="917 123 4567" required></div><small class="muted" id="phoneHint">${PHONE_RULES[0].hint}</small></div>
+        <label>${t('f_guests')}<input class="input" name="guests" type="number" min="1" value="${b.guests}" required></label>
         <label>${t('f_email')}<input class="input" name="email" type="email"></label>
         <label>${t('f_arrival')}<input class="input" name="arrival" type="time" value="${p.checkInTime}"></label>
         <label>${t('f_id')} ${p.requireId ? '' : `<span class="muted">(${t('optional')})</span>`}<div class="upload">${icon('camera')}<span>${t('f_id_hint')}</span><input type="file" name="idPhoto" accept="image/*" ${p.requireId ? 'required' : ''}></div></label>
-        <label>${t('f_notes')}<textarea class="input" name="notes" rows="2" placeholder="${t('f_notes_ph')}"></textarea></label>
+        <label>${t('f_notes')}<textarea class="input" name="notes" rows="2" placeholder="${t('f_notes_ph')}"></textarea></label>${englishNote()}
+        ${S().requireIdApproval && p.requireId ? `<p class="note">${t('id_review_note')}</p>` : ''}
         <label class="check"><input type="checkbox" name="agree" required> <span>${t('f_agree')} <a href="#rules">${t('t_rules')}</a></span></label>
         <button class="btn primary block lg">${t('ci_submit')}</button>
       </form>`;
@@ -316,7 +340,7 @@
   V.checkout = () => {
     const p = property(), a = access(), b = a.b;
     const head = topBar() + pageHead('check', t('before_leaving'), t('nav_checkout'), t('co_sub'));
-    if (!a.verified || b.status === 'upcoming') return head + lockCard('checkin');
+    if (!a.verified || b.status === 'upcoming') return head + lockCard();
     if (b.status === 'checked_out') return head + `<div class="card center">${icon('check', 'big ok')}<h2>${t('co_done')}</h2><p class="muted">${t('co_done_sub')}</p>
       <div class="stack sm">${p.reviewUrl ? `<a class="btn primary block" target="_blank" rel="noopener" href="${esc(p.reviewUrl)}">${icon('star')} ${t('leave_review')}</a>` : ''}<a class="btn outline block" href="#guestbook">${icon('pen')} ${t('t_guestbook')}</a><a class="btn outline block" href="#lostfound">${icon('search')} ${t('t_lostfound')}</a></div></div>`;
     return head + `<form id="coForm" class="stack">
@@ -341,7 +365,7 @@
       <div class="tile-grid">${act('help', 'message', 'sage', t('t_help'), t('t_help_sub'))}${act('extras', 'sparkle', 'beige', t('t_extras'), t('t_extras_sub'))}
         ${act('housekeeping', 'concierge', 'mint', t('t_housekeeping'), t('t_housekeeping_sub'))}${act('stay', 'clock', 'yellow', t('t_stay'), t('t_stay_sub'))}
         ${act('luggage', 'briefcase', 'lavender', t('t_luggage'), t('t_luggage_sub'))}${act('lostfound', 'search', 'beige', t('t_lostfound'), t('t_lostfound_sub'))}</div>
-      <h2 class="sub-h">${t('t_myrequests')}</h2>
+      <h2 class="sub-h">${t('t_myrequests')}</h2>${englishNote()}
       ${list.length ? list.map(r => `
         <article class="card req">
           <div class="req-head"><div><span class="eyebrow">${t('type_' + r.type)}</span><h3>${esc(r.title)}</h3></div><span class="status s-${r.status}">${t('s_' + r.status)}</span></div>
@@ -364,7 +388,7 @@
         <div class="chips wrap">${chips.map(c => `<button type="button" class="chip" data-chip data-en="${esc(c.en)}">${esc(tr(c))}</button>`).join('')}</div>
         <label>${t('f_details')}<textarea class="input" name="details" rows="3" placeholder="${helpTab === 'request' ? t('details_req_ph') : t('details_issue_ph')}"></textarea></label>
         <label>${t('f_photo')} <span class="muted">(${t('optional')})</span><div class="upload">${icon('camera')}<span>${t('add_photo')}</span><input type="file" name="photo" accept="image/*"></div></label>
-        ${helpTab === 'issue' ? `<label class="check"><input type="checkbox" name="urgent"> <span>${t('urgent')}</span></label>` : ''}
+        ${helpTab === 'issue' ? `<label class="check"><input type="checkbox" name="urgent"> <span>${t('urgent')}</span></label>` : ''}${englishNote()}
         <button class="btn primary block lg">${icon('send')} ${t('send_request')}</button>
       </form>`;
   };
@@ -414,7 +438,7 @@
       <form id="lfForm" class="card stack">
         <label>${t('lf_item')}<input class="input" name="item" required placeholder="${t('lf_item_ph')}"></label>
         <label>${t('lf_where')}<textarea class="input" name="where" rows="2" placeholder="${t('lf_where_ph')}"></textarea></label>
-        <label>${t('lf_return')}<select class="input" name="ret"><option>${t('lf_r1')}</option><option>${t('lf_r2')}</option><option>${t('lf_r3')}</option></select></label>
+        ${englishNote()}<label>${t('lf_return')}<select class="input" name="ret"><option>${t('lf_r1')}</option><option>${t('lf_r2')}</option><option>${t('lf_r3')}</option></select></label>
         <label>${t('f_photo')} <span class="muted">(${t('optional')})</span><div class="upload">${icon('camera')}<span>${t('add_photo')}</span><input type="file" name="photo" accept="image/*"></div></label>
         <button class="btn primary block lg">${t('send_request')}</button></form>`;
   };
@@ -432,7 +456,8 @@
   // ---------- render ----------
   function render() {
     applyTheme(S());
-    document.documentElement.lang = lang === 'fil' ? 'fil' : 'en';
+    if (!langs().some(l => l[0] === lang)) lang = 'en';
+    document.documentElement.lang = lang;
     const r = route();
     let html;
     if (r.startsWith('p-')) { const pg = page(r.slice(2)); html = pg ? guidePage(pg) : V.home(); }
@@ -476,7 +501,7 @@
         <label>${t('f_time')}<input class="input" type="time" name="time" value="09:00"></label></div>
         <label>${t('f_qty')}<input class="input" type="number" name="qty" min="1" value="1" required></label>
         <label>${t('f_notes')}<textarea class="input" name="notes" rows="2" placeholder="${t('svc_notes_ph')}"></textarea></label>
-        ${s.price ? `<p class="total">${t('est_total')}: <b id="svcTotal">${money(s.price)}</b></p>` : `<p class="muted small">${t('svc_confirm')}</p>`}
+        ${englishNote()}${s.price ? `<p class="total">${t('est_total')}: <b id="svcTotal">${money(s.price)}</b></p>` : `<p class="muted small">${t('svc_confirm')}</p>`}
         <button class="btn primary block lg">${t('send_request')}</button>
       </form>`, (root, close) => {
       const f = root.querySelector('#svcForm');
@@ -512,22 +537,41 @@
     checkin() {
       bindForm('verifyForm', f => {
         const v = f.who.value.trim();
-        const p = property();
-        const b = Store.bookingByCode(v) || Store.bookingByLastName(p.id, v);
+        const b = Store.bookingByCode(v);
         if (!b) return toast(t('verify_fail'), 'err');
         code = b.code; safeSet(CODE_KEY, code); propId = b.propertyId; safeSet(PROP_KEY, propId);
         toast(tf('confirmed_hi', { name: b.guestName.split(' ')[0] }), 'ok'); render();
       });
+      const cc = document.getElementById('ccSel');
+      if (cc) cc.onchange = () => { document.getElementById('phoneHint').textContent = PHONE_RULES.find(r => r.cc === cc.value).hint; };
       bindForm('ciForm', async f => {
-        const id = await compressImage(f.idPhoto.files[0], 1000, 0.7);
-        const b = access().b;
+        const ph = checkPhone(f.cc.value, f.phone.value);
+        if (!ph.ok) { toast(`${t('phone_err')} (${ph.rule.hint})`, 'err'); f.phone.focus(); return; }
+        const file = f.idPhoto.files[0];
+        if (file && file.size > LIMITS.photoMB * 1048576) return toast(tf('photo_too_big', { mb: LIMITS.photoMB }), 'err');
+        const id = await compressImage(file, 1000, 0.7);
+        const b = access().b, p = property();
+        const pending = !!(S().requireIdApproval && p.requireId && id);
         const ok = Store.update(d => {
           const bk = d.bookings.find(x => x.id === b.id);
           bk.status = 'checked_in';
-          bk.checkInData = { fullName: f.fullName.value, phone: f.phone.value, email: f.email.value, guests: +f.guests.value, arrival: f.arrival.value, notes: f.notes.value, idPhoto: id, at: Date.now() };
+          bk.idStatus = pending ? 'pending' : 'approved';
+          bk.idNote = '';
+          bk.checkInData = { fullName: f.fullName.value, phone: ph.value, email: f.email.value, guests: +f.guests.value, arrival: f.arrival.value, notes: f.notes.value, idPhoto: id, at: Date.now() };
           Store.notify(`✅ ${f.fullName.value} checked in · ${Store.property(bk.propertyId).name.en} (${f.guests.value} guests, arriving ${fmtTime12(f.arrival.value)})`, { bookingId: b.id, kind: 'checkin' });
+          if (pending) Store.notify(`🪪 ID photo from ${f.fullName.value} needs your approval`, { bookingId: b.id, kind: 'id' });
         });
-        if (ok) { toast(t('ci_ok'), 'ok'); go('p-door'); }
+        if (ok) { toast(pending ? t('ci_pending') : t('ci_ok'), 'ok'); go(pending ? 'home' : 'p-door'); }
+      });
+      bindForm('reForm', async f => {
+        const id = await compressImage(f.idPhoto.files[0], 1000, 0.7);
+        const b = access().b;
+        Store.update(d => {
+          const bk = d.bookings.find(x => x.id === b.id);
+          bk.checkInData.idPhoto = id; bk.idStatus = 'pending'; bk.idNote = '';
+          Store.notify(`🪪 ${bk.guestName} uploaded a new ID photo for approval`, { bookingId: b.id, kind: 'id' });
+        });
+        toast(t('ci_pending'), 'ok'); render();
       });
     },
     help() {
