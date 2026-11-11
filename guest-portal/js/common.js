@@ -98,13 +98,13 @@ function toast(msg, kind = '') {
 }
 
 /* Opens a modal; returns close(). onMount(rootEl, close) wires events. */
-function openModal(html, onMount, cls = '') {
+function openModal(html, onMount, cls = '', onClose) {
   const back = document.createElement('div');
   back.className = 'modal-back';
   back.innerHTML = `<div class="modal ${cls}" role="dialog" aria-modal="true"><button class="modal-x icon-btn" aria-label="Close">${icon('x')}</button>${html}</div>`;
   document.body.appendChild(back);
   document.body.classList.add('no-scroll');
-  const close = () => { back.remove(); if (!document.querySelector('.modal-back')) document.body.classList.remove('no-scroll'); };
+  const close = () => { back.remove(); if (!document.querySelector('.modal-back')) document.body.classList.remove('no-scroll'); onClose && onClose(); };
   back.addEventListener('click', e => { if (e.target === back) close(); });
   back.querySelector('.modal-x').onclick = close;
   onMount && onMount(back.querySelector('.modal'), close);
@@ -131,6 +131,20 @@ function compressImage(file, max = 1200, quality = 0.72) {
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
+  });
+}
+
+/* In-page confirmation dialog (native confirm() is blocked in some embedded viewers). Resolves true/false. */
+function askConfirm(message, opts = {}) {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; resolve(v); } };
+    const close = openModal(`<div class="confirm"><p class="confirm-msg">${esc(message)}</p>
+      <div class="btn-row end"><button class="btn ghost" data-c="0">${esc(opts.cancel || 'Cancel')}</button>
+      <button class="btn ${opts.danger ? 'danger' : 'primary'}" data-c="1">${esc(opts.ok || 'OK')}</button></div></div>`, (root, cl) => {
+      root.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { finish(b.dataset.c === '1'); cl(); });
+      root.querySelector('[data-c="1"]').focus();
+    }, 'small', () => finish(false));
   });
 }
 

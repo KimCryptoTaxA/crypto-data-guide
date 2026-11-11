@@ -170,6 +170,10 @@ textarea.input { resize: vertical; }
 .modal h3 { margin-top: 18px; }
 .modal-x { position: absolute; right: 14px; top: 14px; }
 .modal .btn-row { margin-top: 14px; }
+.modal.small { width: min(100%, 420px); }
+.confirm { padding-top: 10px; }
+.confirm-msg { font: 600 1.25rem/1.35 var(--serif); margin: 0 30px 18px 0; }
+.btn-row.end { justify-content: flex-end; }
 @media (min-width: 640px) { .modal-back { place-items: center; padding: 20px; } .modal { border-radius: 22px; } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes up { from { transform: translateY(30px); opacity: 0; } }

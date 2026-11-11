@@ -155,7 +155,7 @@ const Store = (() => {
   function write(d) {
     try { localStorage.setItem(KEY, JSON.stringify(d)); return true; }
     catch (e) {
-      alert('Browser storage is full. Use smaller photos or remove some images. (A real backend removes this limit.)');
+      toast('Storage is full. Use smaller photos or remove some images. A live server removes this limit.', 'err');
       return false;
     }
   }

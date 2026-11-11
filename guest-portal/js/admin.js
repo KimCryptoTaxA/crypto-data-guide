@@ -40,11 +40,12 @@
       </header>
       <div class="a-body">
         <nav class="a-side">${TABS.map(([k, ic, label]) => `<button data-tab="${k}" class="${tab === k ? 'on' : ''}">${icon(ic)}<span>${label}</span><i class="count" data-count="${k}" hidden></i></button>`).join('')}
-          <a class="side-link" href="guest.html" target="_blank">${icon('external')}<span>Open guest portal</span></a>
+          <a class="side-link" href="guest.html" target="_blank" data-guest="">${icon('external')}<span>Open guest portal</span></a>
         </nav>
         <main class="a-main" id="main"></main>
       </div>`;
     root.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+    bindGuestLinks(root);
     document.getElementById('logoutBtn').onclick = () => { try { sessionStorage.removeItem(AUTH); } catch (e) { } render(); };
     document.getElementById('bellBtn').onclick = e => { e.stopPropagation(); bellOpen = !bellOpen; renderBell(); };
     setupPushBtn();
@@ -309,9 +310,9 @@
       main.querySelectorAll('[data-booking]').forEach(b => b.onclick = () => bookingDetail(Store.booking(b.dataset.booking)));
       main.querySelectorAll('[data-qr]').forEach(b => b.onclick = () => qrModal(Store.booking(b.dataset.qr)));
       main.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => bookingForm(Store.booking(b.dataset.edit)));
-      main.querySelectorAll('[data-delb]').forEach(b => b.onclick = () => {
+      main.querySelectorAll('[data-delb]').forEach(b => b.onclick = async () => {
         const bk = Store.booking(b.dataset.delb);
-        if (!confirm(`Delete booking for ${bk.guestName}? Their requests will also be removed.`)) return;
+        if (!(await askConfirm(`Delete the booking for ${bk.guestName}? Their requests will also be removed.`, { danger: true, ok: 'Delete' }))) return;
         Store.update(d => { d.bookings = d.bookings.filter(x => x.id !== bk.id); d.requests = d.requests.filter(x => x.bookingId !== bk.id); });
         renderMain();
       });
@@ -330,19 +331,19 @@
         Store.update(d => d.properties.push(cp)); sel.propertyIdx = D().properties.length - 1; renderMain();
       };
       const del = main.querySelector('#delProp');
-      if (del) del.onclick = () => {
+      if (del) del.onclick = async () => {
         const p = D().properties[sel.propertyIdx];
         if (D().properties.length === 1) return toast('You need at least one property.', 'err');
         if (D().bookings.some(b => b.propertyId === p.id)) return toast('Delete or move its bookings first.', 'err');
-        if (!confirm(`Delete "${p.name.en}"? This cannot be undone.`)) return;
+        if (!(await askConfirm(`Delete "${p.name.en}"? This cannot be undone.`, { danger: true, ok: 'Delete' }))) return;
         Store.update(d => d.properties.splice(sel.propertyIdx, 1)); sel.propertyIdx = 0; renderMain();
       };
       bindEditor(main, PROP_SECTIONS);
     },
     guestbook(main) {
-      main.querySelectorAll('[data-gb]').forEach(b => b.onclick = () => {
+      main.querySelectorAll('[data-gb]').forEach(b => b.onclick = async () => {
         const [act, id] = b.dataset.gb.split('|');
-        if (act === 'delete' && !confirm('Delete this note?')) return;
+        if (act === 'delete' && !(await askConfirm('Delete this guestbook note?', { danger: true, ok: 'Delete' }))) return;
         Store.update(d => {
           if (act === 'delete') d.guestbook = d.guestbook.filter(g => g.id !== id);
           else d.guestbook.find(g => g.id === id).status = act === 'approve' ? 'approved' : 'hidden';
@@ -359,17 +360,17 @@
       };
       main.querySelector('#importInp').onchange = e => {
         const file = e.target.files[0]; if (!file) return;
-        file.text().then(txt => {
+        file.text().then(async txt => {
           try {
             const data = JSON.parse(txt);
             if (!data.settings || !Array.isArray(data.properties)) throw new Error('bad');
-            if (!confirm('Replace all current data with this backup?')) return;
+            if (!(await askConfirm('Replace all current data with this backup?', { ok: 'Replace' }))) return;
             Store.replaceAll(data); render(); toast('Backup restored', 'ok');
           } catch (er) { toast('That file is not a valid backup.', 'err'); }
         });
       };
-      main.querySelector('#resetBtn').onclick = () => {
-        if (!confirm('Reset everything to the demo data? All your changes, bookings and requests will be erased.')) return;
+      main.querySelector('#resetBtn').onclick = async () => {
+        if (!(await askConfirm('Reset everything to the demo data? All your changes, bookings and requests will be erased.', { danger: true, ok: 'Reset' }))) return;
         Store.reset(); known = new Set(D().notifications.map(n => n.id)); render(); toast('Demo data restored', 'ok');
       };
     },
@@ -414,6 +415,17 @@
     });
   }
 
+  // In the single-page preview, guest links switch views instead of opening a new page.
+  function bindGuestLinks(scope) {
+    scope.querySelectorAll('[data-guest]').forEach(a => a.addEventListener('click', e => {
+      if (!window.PREVIEW) return;
+      e.preventDefault();
+      document.querySelectorAll('.modal-back').forEach(m => m.remove());
+      document.body.classList.remove('no-scroll');
+      window.PREVIEW.show('guest', a.dataset.guest);
+    }));
+  }
+
   function guestLink(b) { return new URL('guest.html?code=' + encodeURIComponent(b.code), location.href).href; }
 
   function qrModal(b) {
@@ -423,10 +435,11 @@
       <div class="qr-box"><div id="qr"></div><code class="code-lg">${esc(b.code)}</code></div>
       <div class="copy-field"><input class="input" readonly value="${esc(link)}"><button class="btn ghost sm" id="cpLink">${icon('copy')} Copy</button></div>
       <label>Message to send<textarea class="input" rows="4" readonly id="msgTxt">${esc(msg)}</textarea></label>
-      <div class="btn-row"><button class="btn primary" id="cpMsg">${icon('copy')} Copy message</button><button class="btn ghost" id="dlQr">${icon('down')} Download QR</button><a class="btn ghost" href="${esc(link)}" target="_blank">${icon('external')} Open as guest</a></div>`, rootEl => {
+      <div class="btn-row"><button class="btn primary" id="cpMsg">${icon('copy')} Copy message</button><button class="btn ghost" id="dlQr">${icon('down')} Download QR</button><a class="btn ghost" href="${esc(link)}" target="_blank" data-guest="${esc(b.code)}">${icon('external')} Open as guest</a></div>`, rootEl => {
       const box = rootEl.querySelector('#qr');
       if (window.QRCode) new QRCode(box, { text: link, width: 200, height: 200, colorDark: '#2a2420', colorLight: '#ffffff' });
       else box.innerHTML = '<p class="muted small">QR library could not load (offline?). The link still works.</p>';
+      bindGuestLinks(rootEl);
       rootEl.querySelector('#cpLink').onclick = () => copyText(link).then(() => toast('Link copied', 'ok'));
       rootEl.querySelector('#cpMsg').onclick = () => copyText(msg).then(() => toast('Message copied', 'ok'));
       rootEl.querySelector('#dlQr').onclick = () => {
@@ -557,7 +570,7 @@
         if (el.dataset.path.startsWith('settings.')) { applyTheme(S()); }
       }
     });
-    ed.addEventListener('click', e => {
+    ed.addEventListener('click', async e => {
       const b = e.target.closest('[data-add],[data-del],[data-move],[data-clear],[data-mapfrom]');
       if (!b) return;
       e.preventDefault();
@@ -566,7 +579,7 @@
         Store.update(d => { const arr = getPath(d, b.dataset.add) || []; arr.push(sec.blank()); setPath(d, b.dataset.add, arr); });
       } else if (b.dataset.del) {
         const [p, i] = b.dataset.del.split('|');
-        if (!confirm('Remove this item?')) return;
+        if (!(await askConfirm('Remove this item?', { danger: true, ok: 'Remove' }))) return;
         Store.update(d => getPath(d, p).splice(+i, 1));
       } else if (b.dataset.move) {
         const [p, i, dir] = b.dataset.move.split('|'); const a = +i, z = a + +dir;
@@ -585,5 +598,6 @@
   }
 
   document.addEventListener('click', e => { if (bellOpen && !e.target.closest('.bell-wrap')) { bellOpen = false; renderBell(); } });
+  window.AdminApp = { render };
   render();
 })();

@@ -1,4 +1,4 @@
-/* Guest-facing web app (phone-first). Hash routes: #/home, #/checkin, ... */
+/* Guest-facing web app (phone-first). Hash routes: #home, #checkin, ... */
 (function () {
   const app = document.getElementById('app');
   const CODE_KEY = 'guestportal_code';
@@ -16,7 +16,7 @@
   const property = () => { const b = booking(); return b && Store.property(b.propertyId); };
   const money = n => `${S().currency}${Number(n || 0).toLocaleString()}`;
   const route = () => (location.hash.replace(/^#\/?/, '') || 'home');
-  const go = r => { location.hash = '#/' + r; };
+  const go = r => { location.hash = '#' + r; };
 
   // ---------- auto-login from link (?code=XXXX) ----------
   const urlCode = new URLSearchParams(location.search).get('code');
@@ -36,13 +36,13 @@
 
   function bottomNav() {
     const r = route();
-    const item = (to, ic, label, cls = '') => `<a href="#/${to}" class="${r === to ? 'on' : ''} ${cls}">${icon(ic)}<span>${label}</span></a>`;
+    const item = (to, ic, label, cls = '') => `<a href="#${to}" class="${r === to ? 'on' : ''} ${cls}">${icon(ic)}<span>${label}</span></a>`;
     const open = Store.get().requests.filter(x => x.bookingId === booking().id && !['done', 'declined'].includes(x.status)).length;
     return `<nav class="g-nav">
       ${item('home', 'home', t('nav_home'))}
       ${item('services', 'coffee', t('nav_services'))}
       ${item('help', 'message', t('nav_request'))}
-      <a href="#/myrequests" class="${r === 'myrequests' ? 'on' : ''}">${icon('list')}<span>${t('nav_my')}</span>${open ? `<i class="dot">${open}</i>` : ''}</a>
+      <a href="#myrequests" class="${r === 'myrequests' ? 'on' : ''}">${icon('list')}<span>${t('nav_my')}</span>${open ? `<i class="dot">${open}</i>` : ''}</a>
       ${item('sos', 'phone', 'SOS', 'sos')}
     </nav>`;
   }
@@ -50,7 +50,7 @@
   function page(title, body, opts = {}) {
     return `<section class="g-page">
       <div class="g-page-head">
-        <a href="#/home" class="icon-btn back" aria-label="${t('back')}">${icon('back')}</a>
+        <a href="#home" class="icon-btn back" aria-label="${t('back')}">${icon('back')}</a>
         <div><h1>${esc(title)}</h1>${opts.sub ? `<p class="muted">${esc(opts.sub)}</p>` : ''}</div>
       </div>
       ${body}
@@ -75,7 +75,7 @@
     const lb = document.getElementById('langBtn');
     if (lb) lb.onclick = () => { lang = lang === 'en' ? 'fil' : 'en'; safeSet('guestportal_lang', lang); render(); };
     const lo = document.getElementById('logoutBtn');
-    if (lo) lo.onclick = () => { if (confirm(t('logout_confirm'))) { code = ''; safeSet(CODE_KEY, null); history.replaceState(null, '', location.pathname); render(); } };
+    if (lo) lo.onclick = async () => { if (await askConfirm(t('logout_confirm'), { ok: t('logout'), cancel: t('cancel') })) { code = ''; safeSet(CODE_KEY, null); try { history.replaceState(null, '', location.pathname); } catch (e) { } render(); } };
   }
 
   // ---------- login ----------
@@ -119,12 +119,12 @@
 
   function home() {
     const b = booking(), p = property(), st = stayStatus(b);
-    const tile = (to, ic, key) => `<a class="tile" href="#/${to}">${icon(ic)}<span>${t(key)}</span></a>`;
+    const tile = (to, ic, key) => `<a class="tile" href="#${to}">${icon(ic)}<span>${t(key)}</span></a>`;
     const cta = b.status === 'upcoming'
-      ? `<a class="btn primary block" href="#/checkin">${icon('login')} ${t('cta_checkin')}</a>`
+      ? `<a class="btn primary block" href="#checkin">${icon('login')} ${t('cta_checkin')}</a>`
       : b.status === 'checked_in'
-        ? `<a class="btn ghost block" href="#/checkout">${icon('logout')} ${t('cta_checkout')}</a>`
-        : `<a class="btn ghost block" href="#/guestbook">${icon('pen')} ${t('cta_guestbook')}</a>`;
+        ? `<a class="btn ghost block" href="#checkout">${icon('logout')} ${t('cta_checkout')}</a>`
+        : `<a class="btn ghost block" href="#guestbook">${icon('pen')} ${t('cta_guestbook')}</a>`;
     return `
       <div class="hero" style="${p.heroImage ? `background-image:url('${esc(p.heroImage)}')` : ''}">
         <div class="hero-in">
@@ -171,7 +171,7 @@
   function checkin() {
     const b = booking(), p = property();
     if (b.status !== 'upcoming') {
-      return page(t('t_checkin'), `<div class="card center">${icon('check', 'big ok')}<h2>${t('ci_done')}</h2><p class="muted">${t('ci_done_sub')}</p><a class="btn primary" href="#/selfcheckin">${icon('key')} ${t('see_door')}</a></div>`);
+      return page(t('t_checkin'), `<div class="card center">${icon('check', 'big ok')}<h2>${t('ci_done')}</h2><p class="muted">${t('ci_done_sub')}</p><a class="btn primary" href="#selfcheckin">${icon('key')} ${t('see_door')}</a></div>`);
     }
     return page(t('t_checkin'), `
       <form id="ciForm" class="card stack">
@@ -186,7 +186,7 @@
           <div class="upload">${icon('camera')}<span id="idName">${t('f_id_hint')}</span><input type="file" name="idPhoto" accept="image/*" ${p.requireId ? 'required' : ''}></div>
         </label>
         <label>${t('f_notes')}<textarea class="input" name="notes" rows="2" placeholder="${t('f_notes_ph')}"></textarea></label>
-        <label class="check"><input type="checkbox" name="agree" required> <span>${t('f_agree')} <a href="#/rules">${t('t_rules')}</a></span></label>
+        <label class="check"><input type="checkbox" name="agree" required> <span>${t('f_agree')} <a href="#rules">${t('t_rules')}</a></span></label>
         <button class="btn primary block">${icon('check')} ${t('ci_submit')}</button>
       </form>`, { sub: t('ci_sub') });
   }
@@ -198,7 +198,7 @@
     const steps = (p.selfCheckIn || []).map((s, i) => `<li class="step"><span class="num">${i + 1}</span><div><h3>${esc(tr(s.title))}</h3>${paras(tr(s.text))}${s.image ? `<img src="${esc(s.image)}" alt="" class="step-img">` : ''}</div></li>`).join('');
     const doorHtml = unlocked
       ? `<div class="door-code"><p class="eyebrow">${t('door_code')}</p><p class="code">${esc(p.doorCode)}</p></div>`
-      : `<div class="door-code locked">${icon('key')}<p>${t('door_locked')}</p>${b.status === 'upcoming' ? `<a class="btn primary" href="#/checkin">${t('cta_checkin')}</a>` : ''}</div>`;
+      : `<div class="door-code locked">${icon('key')}<p>${t('door_locked')}</p>${b.status === 'upcoming' ? `<a class="btn primary" href="#checkin">${t('cta_checkin')}</a>` : ''}</div>`;
     return page(t('t_selfcheckin'), `${doorHtml}<ol class="steps">${steps}</ol>
       ${p.mapUrl ? `<a class="btn ghost block" target="_blank" rel="noopener" href="${esc(p.mapUrl)}">${icon('pin')} ${t('open_map')}</a>` : ''}`, { sub: p.address });
   }
@@ -356,7 +356,7 @@
   function myrequests() {
     const b = booking();
     const list = Store.get().requests.filter(r => r.bookingId === b.id);
-    if (!list.length) return page(t('t_myrequests'), `<div class="card center empty">${icon('inbox', 'big')}<p class="muted">${t('no_requests')}</p><a href="#/help" class="btn primary">${t('t_help')}</a></div>`);
+    if (!list.length) return page(t('t_myrequests'), `<div class="card center empty">${icon('inbox', 'big')}<p class="muted">${t('no_requests')}</p><a href="#help" class="btn primary">${t('t_help')}</a></div>`);
     return page(t('t_myrequests'), list.map(r => `
       <article class="card req">
         <div class="req-head"><div><p class="eyebrow">${t('type_' + r.type)}</p><h3>${esc(r.title)}</h3></div><span class="status s-${r.status}">${t('s_' + r.status)}</span></div>
@@ -385,9 +385,9 @@
     if (b.status === 'checked_out') {
       return page(t('t_checkout'), `<div class="card center">${icon('check', 'big ok')}<h2>${t('co_done')}</h2><p class="muted">${t('co_done_sub')}</p>
         ${p.reviewUrl ? `<a class="btn primary" target="_blank" rel="noopener" href="${esc(p.reviewUrl)}">${icon('star')} ${t('leave_review')}</a>` : ''}
-        <a class="btn ghost" href="#/guestbook">${icon('pen')} ${t('t_guestbook')}</a></div>`);
+        <a class="btn ghost" href="#guestbook">${icon('pen')} ${t('t_guestbook')}</a></div>`);
     }
-    if (b.status !== 'checked_in') return page(t('t_checkout'), `<div class="card center"><p class="muted">${t('co_not_yet')}</p><a class="btn primary" href="#/checkin">${t('cta_checkin')}</a></div>`);
+    if (b.status !== 'checked_in') return page(t('t_checkout'), `<div class="card center"><p class="muted">${t('co_not_yet')}</p><a class="btn primary" href="#checkin">${t('cta_checkin')}</a></div>`);
     return page(t('t_checkout'), `
       <form id="coForm" class="stack">
         <div class="card stack"><h3>${t('co_list')}</h3>${(p.checkoutChecklist || []).map(c => `<label class="check"><input type="checkbox" class="co-item"> <span>${esc(tr(c))}</span></label>`).join('')}</div>
@@ -495,9 +495,9 @@
       let rating = 0;
       const stars = document.querySelectorAll('#stars [data-star]');
       stars.forEach(s => s.onclick = () => { rating = +s.dataset.star; stars.forEach(x => x.classList.toggle('on', +x.dataset.star <= rating)); });
-      bindFormSubmit('coForm', f => {
+      bindFormSubmit('coForm', async f => {
         const done = [...f.querySelectorAll('.co-item')].every(c => c.checked);
-        if (!done && !confirm(t('co_unchecked'))) return;
+        if (!done && !(await askConfirm(t('co_unchecked'), { ok: t('co_anyway'), cancel: t('cancel') }))) return;
         const b = booking();
         Store.update(d => {
           const bk = d.bookings.find(x => x.id === b.id);
@@ -534,5 +534,7 @@
   });
 
   window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+  // Hook used by the single-page preview build to switch guests.
+  window.GuestApp = { render, setCode(c) { if (c) { code = c; safeSet(CODE_KEY, c); } if (location.hash !== '#home') location.hash = '#home'; render(); } };
   render();
 })();

@@ -3,7 +3,7 @@
  */
 const I18N = {
   en: {
-    back: 'Back', logout: 'Sign out', logout_confirm: 'Sign out of this stay?',
+    back: 'Back', cancel: 'Cancel', co_anyway: 'Check out anyway', logout: 'Sign out', logout_confirm: 'Sign out of this stay?',
     login_title: 'Welcome to your stay', login_sub: 'Enter the booking code your host sent you to open your guest portal.',
     code_placeholder: 'Booking code', login_btn: 'Open my stay', login_hint: 'Can\'t find your code? Check your booking messages or contact your host.',
     code_invalid: 'That code was not found. Please check and try again.',
@@ -53,7 +53,7 @@ const I18N = {
     s_new: 'Sent', s_in_progress: 'In progress', s_approved: 'Approved', s_declined: 'Declined', s_done: 'Done',
   },
   fil: {
-    back: 'Bumalik', logout: 'Mag-sign out', logout_confirm: 'Mag-sign out sa stay na ito?',
+    back: 'Bumalik', cancel: 'Kanselahin', co_anyway: 'Mag-check out pa rin', logout: 'Mag-sign out', logout_confirm: 'Mag-sign out sa stay na ito?',
     login_title: 'Maligayang pagdating', login_sub: 'Ilagay ang booking code na ipinadala ng inyong host para mabuksan ang guest portal.',
     code_placeholder: 'Booking code', login_btn: 'Buksan ang aking stay', login_hint: 'Hindi makita ang code? Tingnan ang inyong booking messages o kontakin ang host.',
     code_invalid: 'Hindi nakita ang code. Pakisuri at subukang muli.',
