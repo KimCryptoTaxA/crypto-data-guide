@@ -7,6 +7,7 @@ Client-facing instructions for pulling exchange and wallet transaction history (
   - Reads the whitelist IP on each CoinTracking import page and updates the `IPS` table in `index.html` if it changed.
   - Fingerprints each page's instruction text and flags pages CoinTracking has rewritten.
   - Any change arrives as a **pull request**. Nothing goes live until you merge it.
+- **Logos:** each card shows the exchange or wallet logo. Bundled logos live in `logos/` (from the MIT-licensed web3icons set); the rest load the service's own site icon from Google's favicon service, mapped in `LOGO_FILE` / `LOGO_DOMAIN` in `index.html`. If no logo loads, the two-letter badge shows instead. To add or swap one, drop an SVG in `logos/` and add the source id to `LOGO_FILE`.
 
 ---
 

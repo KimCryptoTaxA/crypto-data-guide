@@ -60,6 +60,8 @@ details.src>summary::-webkit-details-marker{display:none}
 .name{font-weight:600;font-size:16px;margin-right:auto}
 .badge{flex:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font-family:var(--f-mono);font-weight:500;font-size:13px;letter-spacing:.02em}
 .b-exchange{background:var(--api-soft);color:var(--api)} .b-wallet{background:var(--addr-soft);color:var(--addr)} .b-other{background:var(--csv-soft);color:var(--csv)}
+.badge.logo{background:#fff;padding:5px;box-sizing:border-box;box-shadow:inset 0 0 0 1px rgba(0,0,0,.08)}
+.badge.logo img{width:100%;height:100%;object-fit:contain;display:block;border-radius:4px}
 .caret{color:var(--muted);transition:transform .15s}
 details[open] .caret{transform:rotate(90deg)}
 .tag{font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;padding:2px 7px;border-radius:5px;text-transform:uppercase}
@@ -206,6 +208,7 @@ h3.me{font-family:var(--f-display);font-size:18px;margin:24px 0 8px}
   <footer>
     <p><strong>Whitelist IPs are checked every 24 hours</strong> against CoinTracking's import pages. Last change: <span id="last-updated"></span>.</p>
     <p>Steps marked <strong>CoinTracking</strong> follow CoinTracking's public import pages. Steps marked <strong>Firm guide</strong> come from our previous instructions where CoinTracking does not publish the exchange-side steps. Exchanges change their menus often; if a step no longer matches what you see, export the closest full transaction history and tell us in your ShareFile note.</p>
+    <p>Exchange, wallet and blockchain logos are trademarks of their owners and are shown only to help you find the right service. This guide is not affiliated with or endorsed by them.</p>
   </footer>
 </div>
 
@@ -405,11 +408,33 @@ function mono(s){
   const w=s.name.replace(/\(.*?\)/g,"").split(/[\s.\-&\/]+/).filter(Boolean);
   return w.length>1?(w[0][0]+w[1][0]).toUpperCase():w[0][0].toUpperCase()+w[0][1].toLowerCase();
 }
+/* LOGOS: files in /logos are bundled (web3icons, MIT). Others use the service's own site icon via
+   Google's favicon service. If a logo fails to load, or Google returns its 16px generic globe
+   (no icon found), the two-letter badge is shown instead. */
+const LOGO_FILE={binance:"binance",bitget:"bitget",bitstamp:"bitstamp",bybit:"bybit",coinbase:"coinbase","coinbase-pro":"coinbase",
+  cryptocom:"cryptocom",gateio:"gateio",gemini:"gemini",kraken:"kraken","kraken-futures":"kraken",kucoin:"kucoin",okx:"okx",
+  ledger:"ledger",trezor:"trezor",exodus:"exodus",evm:"ethereum",bitcoin:"bitcoin","bitcoin-core":"bitcoin",solana:"solana"};
+const LOGO_DOMAIN={"binance-us":"binance.us",bibox:"bibox.com",bitfinex:"bitfinex.com",bitmex:"bitmex.com",bitpanda:"bitpanda.com",
+  bitrue:"bitrue.com","blockchain-com":"blockchain.com",btcmarkets:"btcmarkets.net",bydfi:"bydfi.com",changelly:"changelly.com",
+  coinjar:"coinjar.com",coinspot:"coinspot.com.au",deribit:"deribit.com",etoro:"etoro.com",ftx:"ftx.com",hitbtc:"hitbtc.com",
+  htx:"htx.com",idex:"idex.io",mexc:"mexc.com",poloniex:"poloniex.com",robinhood:"robinhood.com",uphold:"uphold.com",
+  obyte:"obyte.org",cointracker:"cointracker.io",cointracking:"cointracking.info",cryptotax:"cryptotax.io",delta:"delta.app",osl:"osl.com"};
+function logoUrl(s){
+  if(LOGO_FILE[s.id])return "logos/"+LOGO_FILE[s.id]+".svg";
+  if(LOGO_DOMAIN[s.id])return "https://www.google.com/s2/favicons?sz=64&domain="+LOGO_DOMAIN[s.id];
+  return "";
+}
+function logoFail(img){const b=img.parentNode;b.classList.remove("logo");b.textContent=img.dataset.m;}
+function badge(s){
+  const u=logoUrl(s), m=esc(mono(s));
+  return u?`<span class="badge logo b-${s.type}" aria-hidden="true"><img src="${u}" alt="" width="26" height="26" loading="lazy" data-m="${m}" onerror="logoFail(this)" onload="if(this.naturalWidth<=16)logoFail(this)"></span>`
+          :`<span class="badge b-${s.type}" aria-hidden="true">${m}</span>`;
+}
 function card(s,q,open){
   const tags=s.methods.map(k=>`<span class="tag t-${k}">${TAG[k]}</span>`).join("")+(s.flags||[]).map(f=>`<span class="tag t-flag">${esc(f)}</span>`).join("");
   const warn=s.warn?`<div class="warn"><strong>Heads-up</strong><ul>${s.warn.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>`:"";
   const methods=s.methods.map(k=>`<div class="method"><h3>${LABEL[k]} ${srcNote(s[k].src)}</h3><ol>${s[k].steps.map(x=>`<li>${x}</li>`).join("")}</ol></div>`).join("");
-  return `<details class="src" id="${s.id}"${open?" open":""}><summary><span class="caret" aria-hidden="true">▸</span><span class="badge b-${s.type}" aria-hidden="true">${esc(mono(s))}</span><span class="name">${hl(s.name,q)}</span>${tags}</summary><div class="body">${warn}${methods}</div></details>`;
+  return `<details class="src" id="${s.id}"${open?" open":""}><summary><span class="caret" aria-hidden="true">▸</span>${badge(s)}<span class="name">${hl(s.name,q)}</span>${tags}</summary><div class="body">${warn}${methods}</div></details>`;
 }
 
 function render(){
